@@ -1,0 +1,2 @@
+New-Item -ItemType File -Path .\backend.gitkeep
+New-Item -ItemType File -Path .\ml-service.gitkeep
