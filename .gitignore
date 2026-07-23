@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+# Python
+ml-service/__pycache__/
+ml-service/**/__pycache__/
+ml-service/.venv/
+ml-service/venv/
+ml-service/*.pyc
+
+# Docker
+*.log
+
+# ML models/weights (large binary files — don't commit)
+ml-service/app/intent_classifier/model.pkl
+*.pt
+*.pth
+*.onnx
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Supabase local
+supabase/.temp/
+
+# Build artifacts
+dist/
+build/
