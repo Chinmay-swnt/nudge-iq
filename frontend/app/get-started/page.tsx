@@ -3,22 +3,19 @@
 
 import Link from "next/link";
 
-// import { createClient } from "@/lib/supabaseClient"; // client-side supabase client
+import { createClient } from "@/lib/supabaseClient"; // client-side supabase client
 
 const GetStarted = () => {
-  //   const supabase = createClient();
+  const supabase = createClient();
 
-  //   const handleGoogleAuth = async () => {
-  //     await supabase.auth.signInWithOAuth({
-  //       provider: "google",
-  //       options: {
-  //         redirectTo: `${window.location.origin}/dashboard`,
-  //       },
-  //     });
-  //     // Supabase handles both signup + login automatically —
-  //     // if the Google account doesn't exist yet, it creates one;
-  //     // if it does, it logs in. No separate flow needed.
-  //   };
+  const handleGoogleAuth = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
@@ -28,13 +25,13 @@ const GetStarted = () => {
           Track meetings. Assign tasks. Never miss a follow-up.
         </p>
 
-        <Link
-          href="/dashboard"
+        <button
+          onClick={handleGoogleAuth}
           className="w-full flex items-center justify-center gap-2 border border-[#E5E5E5] rounded-lg py-2 text-sm font-medium text-[#111111] hover:bg-[#F8F9FA] transition-colors"
         >
           <GoogleIcon />
           Continue with Google
-        </Link>
+        </button>
       </div>
     </div>
   );

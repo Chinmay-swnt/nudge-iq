@@ -1,21 +1,21 @@
 // src/app/dashboard/layout.tsx
 import { redirect } from "next/navigation";
 import Link from "next/link";
-// import { createClient } from '@/lib/supabaseServer'; // server-side supabase client
+import { createClient } from "@/lib/supabaseServer"; // server-side supabase client
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  //   const supabase = createClient();
-  //   const {
-  //     data: { user },
-  //   } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await (await supabase).auth.getUser();
 
-  //   if (!user) {
-  //     redirect('/login');
-  //   }
+  if (!user) {
+    redirect("/get-started");
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F8F9FA]">
@@ -33,7 +33,7 @@ export default async function DashboardLayout({
           </nav>
         </div>
 
-        {/* <div className="px-2 text-sm text-gray-400 truncate">{user.email}</div> */}
+        <div className="px-2 text-sm text-gray-400 truncate">{user.email}</div>
       </aside>
 
       {/* Main content */}
