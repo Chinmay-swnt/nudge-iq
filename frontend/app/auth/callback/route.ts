@@ -1,14 +1,14 @@
 // app/auth/callback/route.ts
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
 
-  console.log("CALLBACK HIT — code:", code);
-
   if (code) {
+    const cookieStore = await cookies();
     const response = NextResponse.redirect(`${origin}/dashboard`);
 
     const supabase = createServerClient(
@@ -17,14 +17,11 @@ export async function GET(request: Request) {
       {
         cookies: {
           getAll() {
-            return [];
+            return cookieStore.getAll();
           },
           setAll(cookiesToSet) {
-            console.log(
-              "SETTING COOKIES:",
-              cookiesToSet.map((c) => c.name),
-            );
             cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
               response.cookies.set(name, value, options);
             });
           },
@@ -33,7 +30,7 @@ export async function GET(request: Request) {
     );
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    console.log("EXCHANGE ERROR:", error);
+    if (error) console.log("EXCHANGE ERROR:", error);
 
     return response;
   }

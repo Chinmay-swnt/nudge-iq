@@ -11,7 +11,7 @@ export default async function DashboardLayout({
   const supabase = await createClient();
   const {
     data: { user },
-  } = await (await supabase).auth.getUser();
+  } = await supabase.auth.getUser(); // remove the extra (await supabase)
 
   if (!user) {
     redirect("/get-started");
