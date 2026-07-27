@@ -26,7 +26,7 @@ export default async function DashboardLayout({
 
           <nav className="flex flex-col gap-1">
             <SidebarLink href="/dashboard" label="Dashboard" />
-            <SidebarLink href="/meetings" label="Meetings" />
+            <SidebarLink href="/dashboard/meetings" label="Meetings" />
             <SidebarLink href="/dashboard/tasks" label="Tasks" />
             <SidebarLink href="/dashboard/analytics" label="Analytics" />
             <SidebarLink href="/dashboard/settings" label="Settings" />
