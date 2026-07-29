@@ -17,6 +17,11 @@ export default async function DashboardLayout({
     redirect("/get-started");
   }
 
+  const { data: teams } = await supabase
+    .from("team_members")
+    .select("team_id, role, teams(id, name)")
+    .eq("user_id", user.id);
+
   return (
     <div className="flex min-h-screen bg-[#F8F9FA]">
       {/* Sidebar */}
@@ -25,11 +30,24 @@ export default async function DashboardLayout({
           <div className="text-xl font-bold mb-8 px-2">NudgeIQ</div>
 
           <nav className="flex flex-col gap-1">
-            <SidebarLink href="/dashboard" label="Dashboard" />
-            <SidebarLink href="/dashboard/meetings" label="Meetings" />
+            <SidebarLink href="/dashboard" label="Overview" />
+            <div className="flex flex-row px-3 py-2 rounded-lg text-sm text-white justify-between">
+              Teams
+              <Link href={""} className="">
+                +
+              </Link>
+            </div>
+            {teams?.map((t: any) => (
+              <SidebarLink
+                key={t.team_id}
+                href={`/dashboard/team/${t.team_id}`}
+                label={t.teams?.name}
+              />
+            ))}
+            {/* <SidebarLink href="/dashboard/meetings" label="Meetings" />
             <SidebarLink href="/dashboard/tasks" label="Tasks" />
             <SidebarLink href="/dashboard/analytics" label="Analytics" />
-            <SidebarLink href="/dashboard/settings" label="Settings" />
+            <SidebarLink href="/dashboard/settings" label="Settings" /> */}
           </nav>
         </div>
 
