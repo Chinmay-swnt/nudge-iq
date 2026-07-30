@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseServer"; // server-side supabase client
+import CreateTeamButton from "@/components/createTeamButton";
 
 export default async function DashboardLayout({
   children,
@@ -33,9 +34,7 @@ export default async function DashboardLayout({
             <SidebarLink href="/dashboard" label="Overview" />
             <div className="flex flex-row px-3 py-2 rounded-lg text-sm text-white justify-between">
               Teams
-              <Link href={""} className="">
-                +
-              </Link>
+              <CreateTeamButton />
             </div>
             {teams?.map((t: any) => (
               <SidebarLink
