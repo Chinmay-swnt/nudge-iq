@@ -1,8 +1,6 @@
-// src/app/dashboard/layout.tsx
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabaseServer"; // server-side supabase client
-import CreateTeamButton from "@/components/createTeamButton";
+import { createClient } from "@/lib/supabaseServer";
 
 export default async function DashboardLayout({
   children,
@@ -12,60 +10,49 @@ export default async function DashboardLayout({
   const supabase = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser(); // remove the extra (await supabase)
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect("/get-started");
   }
 
-  const { data: teams } = await supabase
-    .from("team_members")
-    .select("team_id, role, teams(id, name)")
-    .eq("user_id", user.id);
-
   return (
-    <div className="flex min-h-screen bg-[#F8F9FA]">
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#0F182B] text-white flex flex-col justify-between p-4">
-        <div>
-          <div className="text-xl font-bold mb-8 px-2">NudgeIQ</div>
-
-          <nav className="flex flex-col gap-1">
-            <SidebarLink href="/dashboard" label="Overview" />
-            <div className="flex flex-row px-3 py-2 rounded-lg text-sm text-white justify-between">
-              Teams
-              <CreateTeamButton />
-            </div>
-            {teams?.map((t: any) => (
-              <SidebarLink
-                key={t.team_id}
-                href={`/dashboard/team/${t.team_id}`}
-                label={t.teams?.name}
-              />
-            ))}
-            {/* <SidebarLink href="/dashboard/meetings" label="Meetings" />
-            <SidebarLink href="/dashboard/tasks" label="Tasks" />
-            <SidebarLink href="/dashboard/analytics" label="Analytics" />
-            <SidebarLink href="/dashboard/settings" label="Settings" /> */}
-          </nav>
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col">
+      {/* Global Top Navbar */}
+      <header className="bg-white border-b border-[#E5E5E5] px-8 py-3.5 flex items-center justify-between sticky top-0 z-30">
+        <div className="flex items-center gap-6">
+          <Link href="/dashboard" className="text-xl font-bold tracking-tight text-[#111111] flex items-center gap-2">
+            <span className="w-7 h-7 bg-[#0A0A0A] text-white rounded-lg flex items-center justify-center font-black text-sm">
+              N
+            </span>
+            NudgeIQ
+          </Link>
         </div>
 
-        <div className="px-2 text-sm text-gray-400 truncate">{user.email}</div>
-      </aside>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-500 hidden sm:inline-block">
+            {user.email}
+          </span>
+          <form action="/auth/signout" method="post">
+            <button
+              formAction={async () => {
+                "use server";
+                const serverSupabase = await createClient();
+                await serverSupabase.auth.signOut();
+                redirect("/get-started");
+              }}
+              className="text-xs text-gray-500 hover:text-red-600 font-medium px-3 py-1.5 rounded-md hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors cursor-pointer"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </header>
 
-      {/* Main content */}
-      <main className="flex-1 p-8">{children}</main>
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8">
+        {children}
+      </main>
     </div>
-  );
-}
-
-function SidebarLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-[#1A1A1A] hover:text-white transition-colors"
-    >
-      {label}
-    </Link>
   );
 }
