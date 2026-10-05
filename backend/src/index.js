@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const hardwareRoutes = require("./routes/hardware.routes");
+const meetingPipelineRoutes = require("./routes/meetingPipeline.routes");
 
 const app = express();
 
@@ -17,6 +18,10 @@ app.get("/health", (req, res) => {
 // Hardware ingestion integration routes
 app.use("/meetings", hardwareRoutes);
 app.use("/api/hardware", hardwareRoutes);
+
+// Meeting Bot & AI Pipeline routes
+app.use("/api/pipeline", meetingPipelineRoutes);
+app.use("/meetings", meetingPipelineRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
