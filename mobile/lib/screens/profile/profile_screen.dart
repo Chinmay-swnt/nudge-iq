@@ -60,11 +60,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = _supabaseService.currentUser;
-    final email = user?.email ?? 'user@nudgeiq.com';
-    final name = (user?.userMetadata?['full_name'] as String?) ??
-        (user?.userMetadata?['name'] as String?) ??
-        email.split('@').first;
+    final name = _supabaseService.currentUserName;
+    final email = _supabaseService.currentUserEmail;
+    final isDemo = _supabaseService.isDemoMode;
 
     return Scaffold(
       backgroundColor: AppConstants.background,
@@ -109,13 +107,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: AppConstants.textPrimary,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                name,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppConstants.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isDemo) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppConstants.warning.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'DEMO',
+                                  style: TextStyle(
+                                    color: AppConstants.warning,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 3),
                         Text(

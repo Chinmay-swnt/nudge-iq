@@ -4,12 +4,13 @@ class AppConstants {
   // Default Supabase project configuration (matches web/local environment)
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://placeholder.supabase.co',
+    defaultValue: 'https://bhaxqvxngqmucthisajd.supabase.co',
   );
 
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: 'placeholder-anon-key',
+    defaultValue:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoYXhxdnhuZ3FtdWN0aGlzYWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3ODMxNzMsImV4cCI6MjEwMDM1OTE3M30.s7I6Rbnx8POW4ygFz-xqN9dcH8GC27i2aC-eG11HKag',
   );
 
   // App Color Scheme (matching NudgeIQ Web Design System)

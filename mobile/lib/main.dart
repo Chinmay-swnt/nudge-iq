@@ -4,6 +4,7 @@ import 'config/constants.dart';
 import 'config/theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main_navigation.dart';
+import 'services/supabase_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,6 +13,7 @@ Future<void> main() async {
   try {
     await Supabase.initialize(
       url: AppConstants.supabaseUrl,
+      // ignore: deprecated_member_use
       anonKey: AppConstants.supabaseAnonKey,
       authOptions: const FlutterAuthClientOptions(
         authFlowType: AuthFlowType.pkce,
@@ -43,23 +45,32 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Check if Supabase client is initialized
-    try {
-      final client = Supabase.instance.client;
-      return StreamBuilder<AuthState>(
-        stream: client.auth.onAuthStateChange,
-        builder: (context, snapshot) {
-          final session = client.auth.currentSession;
-          if (session != null) {
-            return const MainNavigation();
-          } else {
-            return const LoginScreen();
-          }
-        },
-      );
-    } catch (e) {
-      // Fallback if client is uninitialized in test / demo
-      return const LoginScreen();
-    }
+    final supabaseService = SupabaseService();
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: supabaseService.authNotifier,
+      builder: (context, isDemoActive, _) {
+        if (isDemoActive || supabaseService.isDemoMode) {
+          return const MainNavigation();
+        }
+
+        try {
+          final client = Supabase.instance.client;
+          return StreamBuilder<AuthState>(
+            stream: client.auth.onAuthStateChange,
+            builder: (context, snapshot) {
+              final session = client.auth.currentSession;
+              if (session != null) {
+                return const MainNavigation();
+              } else {
+                return const LoginScreen();
+              }
+            },
+          );
+        } catch (e) {
+          return const LoginScreen();
+        }
+      },
+    );
   }
 }

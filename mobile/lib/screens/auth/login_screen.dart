@@ -24,11 +24,16 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Sign in failed: ${e.toString()}';
+          _errorMessage =
+              'Google Sign In could not connect. You can explore the app right now using Demo Mode below!';
           _isLoading = false;
         });
       }
     }
+  }
+
+  void _handleDemoMode() {
+    SupabaseService().enableDemoMode();
   }
 
   @override
@@ -38,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -46,11 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Logo Icon
                 Center(
                   child: Container(
-                    width: 64,
-                    height: 64,
+                    width: 68,
+                    height: 68,
                     decoration: BoxDecoration(
                       color: AppConstants.darkBlock,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxKeyShadow.soft,
                       ],
@@ -60,14 +65,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         'N',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 32,
+                          fontSize: 34,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 // App Title
                 const Text(
@@ -80,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     letterSpacing: -0.8,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
 
                 // Subtitle
                 const Text(
@@ -92,14 +97,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 36),
 
                 // Card container
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: AppConstants.surface,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: AppConstants.border),
                     boxShadow: [
                       BoxKeyShadow.soft,
@@ -109,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Welcome Back',
+                        'Get Started',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -118,30 +123,39 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Sign in to access your assigned tasks and meeting action items.',
+                        'Sign in to access your assigned tasks and team meetings.',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppConstants.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
                       if (_errorMessage != null) ...[
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppConstants.danger.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10),
+                            color: AppConstants.warning.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: AppConstants.danger.withValues(alpha: 0.3),
+                              color: AppConstants.warning.withValues(alpha: 0.3),
                             ),
                           ),
-                          child: Text(
-                            _errorMessage!,
-                            style: const TextStyle(
-                              color: AppConstants.danger,
-                              fontSize: 12,
-                            ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('💡 ', style: TextStyle(fontSize: 14)),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                    color: Color(0xFF92400E),
+                                    fontSize: 12,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -155,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           side: const BorderSide(color: AppConstants.border),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
                         child: _isLoading
@@ -190,22 +204,96 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ],
                               ),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Divider "OR"
+                      Row(
+                        children: [
+                          const Expanded(child: Divider(color: AppConstants.border)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                            child: Text(
+                              'OR',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: AppConstants.textMuted,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const Expanded(child: Divider(color: AppConstants.border)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Demo Mode / Guest User Button
+                      ElevatedButton(
+                        onPressed: _handleDemoMode,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppConstants.darkBlock,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '⚡',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Continue as Demo / Guest User',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
 
-                const Text(
-                  'Encrypted & Secured with Supabase Auth',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppConstants.textMuted,
-                  ),
+                // Feature Highlights
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildFeaturePill('🎯 Assigned Tasks'),
+                    _buildFeaturePill('🎙️ AI Meeting Sync'),
+                    _buildFeaturePill('👥 Multi-Workspace'),
+                  ],
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeaturePill(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppConstants.border),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppConstants.textSecondary,
         ),
       ),
     );

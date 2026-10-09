@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabaseServer";
 import TaskCard from "@/components/TaskCard";
 import AddMeetingActionItemModal from "@/components/AddMeetingActionItemModal";
+import ProcessNowButton from "@/components/ProcessNowButton";
 
 export default async function MeetingDetailPage({
   params,
@@ -86,171 +87,202 @@ export default async function MeetingDetailPage({
     users: tm.users || null,
   }));
 
-  // Parse diarized conversation if available
+  // Parse diarized conversation
   let diarizedDialogue: Array<{ speaker: string; text: string; time?: string }> = [];
   if (transcript?.diarized_json && Array.isArray(transcript.diarized_json)) {
     diarizedDialogue = transcript.diarized_json;
   }
 
-  // Calculate task counts
   const totalTasks = fullTasks.length;
   const completedTasks = fullTasks.filter((t) => t.status === "done").length;
   const pendingTasks = fullTasks.filter((t) => t.status !== "done").length;
+  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* Top Breadcrumb & Header */}
-      <div className="space-y-4">
-        <div>
-          <Link
-            href={`/dashboard/team/${teamId}/meetings`}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#3B82F6] hover:underline"
-          >
-            <span>&larr;</span> Back to Meetings
-          </Link>
-        </div>
+    <div className="space-y-8 pb-16 max-w-6xl mx-auto">
+      {/* Navigation Breadcrumb */}
+      <div className="flex items-center justify-between">
+        <Link
+          href={`/dashboard/team/${teamId}/meetings`}
+          className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-[#111111] transition-colors py-1 px-2.5 rounded-lg bg-white border border-[#E5E5E5] hover:border-gray-300 shadow-2xs"
+        >
+          <span>&larr;</span> All Meetings
+        </Link>
 
-        <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-extrabold tracking-tight text-[#111111]">
-                {meeting.title}
-              </h1>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-gray-100 text-gray-600 border border-gray-200">
+            Workspace: {meeting.teams?.name || "Team"}
+          </span>
+        </div>
+      </div>
+
+      {/* Main Header Hero Card */}
+      <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <span
-                className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider ${
                   meeting.status === "processed"
                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    : "bg-gray-100 text-gray-700 border border-gray-200"
+                    : meeting.status === "uploaded" || meeting.processing_status === "uploaded"
+                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                    : "bg-amber-50 text-amber-700 border border-amber-200 animate-pulse"
                 }`}
               >
-                {meeting.status === "processed" ? "AI Processed" : "Pending Processing"}
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    meeting.status === "processed"
+                      ? "bg-emerald-500"
+                      : meeting.status === "uploaded" || meeting.processing_status === "uploaded"
+                      ? "bg-blue-500"
+                      : "bg-amber-500"
+                  }`}
+                ></span>
+                {meeting.status === "processed"
+                  ? "AI Processed"
+                  : meeting.status === "uploaded" || meeting.processing_status === "uploaded"
+                  ? "Audio Uploaded"
+                  : "Recording Pending"}
               </span>
-            </div>
 
-            <p className="text-sm text-gray-500 flex items-center gap-2">
-              <span>📅</span>
-              <span>
-                {new Date(meeting.meeting_date).toLocaleDateString(undefined, {
-                  weekday: "long",
+              <span className="text-xs text-gray-500 bg-[#F8F9FA] px-3 py-1 rounded-full border border-[#E5E5E5] font-medium">
+                📅 {new Date(meeting.meeting_date).toLocaleDateString(undefined, {
+                  weekday: "short",
                   year: "numeric",
-                  month: "long",
+                  month: "short",
                   day: "numeric",
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
               </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#111111]">
+              {meeting.title}
+            </h1>
+
+            <p className="text-xs sm:text-sm text-gray-500 max-w-2xl">
+              Automated synthesis, assigned action deliverables, and full diarized transcript powered by NudgeIQ AI.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {(meeting.status === "uploaded" || meeting.processing_status === "uploaded" || Boolean(meeting.transcript_url && meeting.status !== "processed")) && (
+              <ProcessNowButton meetingId={meetingId} />
+            )}
             <AddMeetingActionItemModal
               meetingId={meetingId}
               teamMembers={formattedTeamMembers}
             />
           </div>
         </div>
-      </div>
 
-      {/* Overview Stats for this Meeting */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
-            Total Action Items
-          </p>
-          <p className="text-3xl font-extrabold text-[#111111]">{totalTasks}</p>
-          <p className="text-xs text-gray-400 mt-1">Extracted from discussion</p>
-        </div>
-
-        <div className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
-            Completed Tasks
-          </p>
-          <p className="text-3xl font-extrabold text-emerald-600">{completedTasks}</p>
-          <p className="text-xs text-gray-400 mt-1">Resolved follow-ups</p>
-        </div>
-
-        <div className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
-            Pending Tasks
-          </p>
-          <p className="text-3xl font-extrabold text-[#3B82F6]">{pendingTasks}</p>
-          <p className="text-xs text-gray-400 mt-1">In progress & to-do</p>
-        </div>
-      </div>
-
-      {/* Meeting Summary & Key Decisions */}
-      <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-          <div>
-            <h2 className="text-xl font-bold text-[#111111]">Meeting Summary & Takeaways</h2>
-            <p className="text-xs text-gray-400 mt-0.5">High-level synthesis of discussion and decisions</p>
+        {/* Task Completion Progress Bar */}
+        {totalTasks > 0 && (
+          <div className="mt-6 pt-6 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-600 mb-2">
+              <span>Action Items Completion</span>
+              <span className="text-[#111111]">{completedTasks} of {totalTasks} completed ({progressPercent}%)</span>
+            </div>
+            <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+              <div
+                className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                style={{ width: `${progressPercent}%` }}
+              ></div>
+            </div>
           </div>
-          <span className="text-xs bg-blue-50 text-[#3B82F6] px-2.5 py-1 rounded-md font-medium border border-blue-100">
-            Summary
+        )}
+      </div>
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-[#E5E5E5] rounded-2xl p-5 shadow-xs">
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">
+            Total Deliverables
+          </p>
+          <div className="flex items-baseline justify-between">
+            <span className="text-3xl font-extrabold text-[#111111]">{totalTasks}</span>
+            <span className="text-xs font-semibold text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+              Tasks
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Actionable commitments</p>
+        </div>
+
+        <div className="bg-white border border-[#E5E5E5] rounded-2xl p-5 shadow-xs">
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">
+            Completed
+          </p>
+          <div className="flex items-baseline justify-between">
+            <span className="text-3xl font-extrabold text-emerald-600">{completedTasks}</span>
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              {progressPercent}% Done
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Resolved deliverables</p>
+        </div>
+
+        <div className="bg-white border border-[#E5E5E5] rounded-2xl p-5 shadow-xs">
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">
+            Pending Follow-Ups
+          </p>
+          <div className="flex items-baseline justify-between">
+            <span className="text-3xl font-extrabold text-[#3B82F6]">{pendingTasks}</span>
+            <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              Active
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">In progress & to-do items</p>
+        </div>
+      </div>
+
+      {/* Executive Summary & Key Decisions */}
+      <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-bold text-[#111111]">Executive Summary</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Core takeaways and operational alignments</p>
+          </div>
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-500 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200">
+            AI Synthesis
           </span>
         </div>
 
-        {meeting.status === "processed" || transcript?.raw_text ? (
-          <div className="prose text-sm text-gray-700 leading-relaxed bg-[#F8F9FA] p-5 rounded-xl border border-[#E5E5E5]">
-            <p className="font-medium text-[#111111] mb-2">
-              Discussion Highlights:
-            </p>
-            <p>
-              {transcript?.raw_text
-                ? transcript.raw_text.slice(0, 400) + (transcript.raw_text.length > 400 ? "..." : "")
-                : "The team aligned on project deliverables, milestones, and assigned specific action items for the upcoming cycle."}
-            </p>
+        {transcript?.raw_text ? (
+          <div className="space-y-4">
+            <div className="bg-[#F8F9FA] p-5 rounded-xl border border-[#E5E5E5] text-sm text-gray-800 leading-relaxed font-normal">
+              <p className="font-semibold text-[#111111] mb-2 text-xs uppercase tracking-wider text-gray-500">
+                Key Discussion Summary
+              </p>
+              <p className="whitespace-pre-line leading-relaxed">
+                {transcript.raw_text}
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-6 text-center text-sm text-gray-500">
-            <p className="font-semibold text-gray-700 mb-1">Summary Pending AI Processing</p>
-            <p className="text-xs text-gray-400">
-              When audio is uploaded from the hardware ingestion device or ML service, a detailed summary and decisions log will appear here.
+          <div className="bg-[#F8F9FA] border border-dashed border-gray-200 rounded-xl p-8 text-center space-y-2">
+            <p className="font-bold text-[#111111] text-sm">Summary Pending Processing</p>
+            <p className="text-xs text-gray-500 max-w-md mx-auto">
+              Once the bot leaves the call or audio is uploaded, Faster-Whisper will generate an executive summary and extract all commitments automatically.
             </p>
           </div>
         )}
       </div>
 
-      {/* Attendees / Team Members Section */}
-      <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-          <div>
-            <h2 className="text-xl font-bold text-[#111111]">Team Members & Attendees</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Participants involved in this session</p>
-          </div>
-          <span className="text-xs font-semibold text-gray-500">
-            {formattedTeamMembers.length} members
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {formattedTeamMembers.map((tm) => (
-            <div
-              key={tm.user_id}
-              className="p-3 bg-[#F8F9FA] rounded-xl border border-[#E5E5E5] flex items-center gap-3"
-            >
-              <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center shrink-0">
-                {(tm.users?.name || tm.users?.email || "U")[0].toUpperCase()}
-              </div>
-              <div className="truncate">
-                <p className="text-sm font-semibold text-[#111111] truncate">
-                  {tm.users?.name || tm.users?.email || "Teammate"}
-                </p>
-                <p className="text-xs text-gray-500 truncate">
-                  {tm.users?.email || "No email"}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Action Items & Tasks Assigned */}
+      {/* Action Items Matrix */}
       <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-bold text-[#111111]">Action Items Assigned</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Extracted tasks, owners, deadlines, and current status</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-[#111111]">Assigned Action Items</h2>
+              <span className="bg-[#0A0A0A] text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {totalTasks}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Tasks extracted by AI or logged by team members with real-time status tracking
+            </p>
           </div>
 
           <AddMeetingActionItemModal
@@ -259,68 +291,70 @@ export default async function MeetingDetailPage({
           />
         </div>
 
-        {fullTasks.length === 0 ? (
-          <div className="text-center py-10 border border-dashed border-gray-200 rounded-xl">
-            <p className="text-sm font-semibold text-[#111111] mb-1">No action items recorded for this meeting yet</p>
-            <p className="text-xs text-gray-400 mb-4">Click "Add Action Item" above to assign tasks to teammates.</p>
+        {totalTasks === 0 ? (
+          <div className="bg-[#F8F9FA] border border-dashed border-gray-200 rounded-xl p-8 text-center space-y-2">
+            <p className="font-bold text-[#111111] text-sm">No action items recorded for this session</p>
+            <p className="text-xs text-gray-500 max-w-md mx-auto">
+              Click &quot;Add Action Item&quot; above to log commitments manually, or run the recording bot to extract them from live speech.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {fullTasks.map((t) => (
-              <TaskCard key={t.id} task={t} />
+            {fullTasks.map((task) => (
+              <TaskCard key={task.id} task={task} />
             ))}
           </div>
         )}
       </div>
 
-      {/* Detailed Communication / Transcript Section */}
-      <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+      {/* Diarized Conversation Transcript */}
+      <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-bold text-[#111111]">Detailed Communication & Transcript</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Speaker turns, verbatim discussion, and audio records</p>
+            <h2 className="text-lg font-bold text-[#111111]">Verbatim Meeting Transcript</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Time-coded speaker dialogue generated by Faster-Whisper</p>
           </div>
-
-          {meeting.transcript_url && (
-            <a
-              href={meeting.transcript_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-[#3B82F6] hover:underline font-medium flex items-center gap-1"
-            >
-              <span>🎧 Audio File</span>
-              <span>&nearr;</span>
-            </a>
-          )}
+          <span className="text-xs font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200">
+            {diarizedDialogue.length > 0 ? `${diarizedDialogue.length} Turns` : "Full Text"}
+          </span>
         </div>
 
         {diarizedDialogue.length > 0 ? (
-          <div className="space-y-3 bg-[#F8F9FA] p-5 rounded-xl border border-[#E5E5E5]">
-            {diarizedDialogue.map((item, idx) => (
-              <div key={idx} className="flex gap-4 text-sm pb-3 border-b border-gray-200 last:border-0 last:pb-0">
-                <div className="font-bold text-[#111111] shrink-0 w-28 text-xs uppercase tracking-wider text-blue-600">
-                  {item.speaker || `Speaker ${idx + 1}`}:
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+            {diarizedDialogue.map((turn, idx) => {
+              const isSpeaker1 = turn.speaker.toLowerCase().includes("1");
+              return (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-xl border transition-colors ${
+                    isSpeaker1
+                      ? "bg-[#F8F9FA] border-[#E5E5E5]"
+                      : "bg-white border-blue-100 shadow-2xs"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-[#111111] flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${isSpeaker1 ? "bg-gray-700" : "bg-[#3B82F6]"}`}></span>
+                      {turn.speaker}
+                    </span>
+                    {turn.time && (
+                      <span className="text-[11px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                        {turn.time}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed">{turn.text}</p>
                 </div>
-                <div className="flex-1 text-gray-800">
-                  <p>{item.text}</p>
-                  {item.time && <span className="text-[10px] text-gray-400">{item.time}</span>}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : transcript?.raw_text ? (
-          <div className="bg-[#F8F9FA] p-5 rounded-xl border border-[#E5E5E5] text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+          <div className="bg-[#F8F9FA] p-5 rounded-xl border border-[#E5E5E5] text-sm text-gray-700 leading-relaxed font-mono whitespace-pre-line max-h-[400px] overflow-y-auto">
             {transcript.raw_text}
           </div>
         ) : (
-          <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-8 text-center text-sm text-gray-500">
-            <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center mx-auto mb-2 font-bold text-lg">
-              💬
-            </div>
-            <p className="font-semibold text-gray-700 mb-1">Transcript Not Yet Available</p>
-            <p className="text-xs text-gray-400 max-w-sm mx-auto">
-              Once meeting audio is processed through the ESP32 hardware upload or ML service, the full transcript and speaker breakdown will appear here.
-            </p>
+          <div className="bg-[#F8F9FA] border border-dashed border-gray-200 rounded-xl p-8 text-center text-xs text-gray-400">
+            Transcript pending audio ingestion.
           </div>
         )}
       </div>

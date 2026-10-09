@@ -24,6 +24,7 @@ class Meeting {
   });
 
   bool get isProcessed => status == 'processed';
+  bool get hasTranscript => rawTranscript != null || (transcriptUrl != null && transcriptUrl!.isNotEmpty);
 
   factory Meeting.fromJson(Map<String, dynamic> json) {
     final team = json['teams'] as Map<String, dynamic>? ?? {};

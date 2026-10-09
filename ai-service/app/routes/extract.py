@@ -13,49 +13,84 @@ class ExtractRequest(BaseModel):
 
 def parse_deadline_from_text(text: str) -> Optional[str]:
     """
-    Extracts relative dates like 'tomorrow', 'by Friday', 'next week', 'by Oct 15'
-    and resolves to YYYY-MM-DD.
+    Extracts relative and absolute deadlines (tomorrow, Friday, next week, in 2 days, etc.)
+    and converts to ISO YYYY-MM-DD.
     """
     today = datetime.date.today()
-    text_lower = text.lower()
+    t = text.lower()
 
-    if "tomorrow" in text_lower:
+    if "tomorrow" in t or "by tomorrow" in t:
         return (today + datetime.timedelta(days=1)).isoformat()
-    elif "today" in text_lower:
+    elif "today" in t or "by eod" in t or "end of day" in t:
         return today.isoformat()
-    elif "next week" in text_lower:
+    elif "next week" in t or "by next week" in t:
         return (today + datetime.timedelta(days=7)).isoformat()
-    elif "in 2 days" in text_lower or "in two days" in text_lower:
+    elif "in 2 days" in t or "in two days" in t:
         return (today + datetime.timedelta(days=2)).isoformat()
-    elif "in 3 days" in text_lower or "in three days" in text_lower:
+    elif "in 3 days" in t or "in three days" in t:
         return (today + datetime.timedelta(days=3)).isoformat()
+    elif "in a week" in t:
+        return (today + datetime.timedelta(days=7)).isoformat()
 
-    # Day of week detection
-    days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    for i, day in enumerate(days):
-        if f"by {day}" in text_lower or f"on {day}" in text_lower or f"this {day}" in text_lower:
+    # Day of week detection: "by Friday", "on Monday", "this Thursday"
+    weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    for i, day in enumerate(weekdays):
+        if re.search(rf'\b(by|on|this|before)\s+{day}\b', t) or re.search(rf'\b{day}\b', t):
             current_weekday = today.weekday()
             target_weekday = i
-            days_ahead = target_weekday - current_weekday
-            if days_ahead <= 0:
-                days_ahead += 7
-            return (today + datetime.timedelta(days=days_ahead)).isoformat()
+            diff = target_weekday - current_weekday
+            if diff <= 0:
+                diff += 7
+            return (today + datetime.timedelta(days=diff)).isoformat()
 
-    # Default fallback: 3 days from now
+    # Default relative deadline: 3 business days ahead
     return (today + datetime.timedelta(days=3)).isoformat()
+
+def clean_action_phrase(text: str) -> str:
+    """
+    Strips conversational filler and leading speaker tags to produce crisp task descriptions.
+    """
+    # Remove leading speaker tags
+    cleaned = re.sub(r'^(speaker\s*\d+|[a-zA-Z\s]+):\s*', '', text, flags=re.IGNORECASE)
+    # Remove conversational filler starters
+    cleaned = re.sub(
+        r'^(so\s+|um\s+|uh\s+|like\s+|basically\s+|i\s+think\s+that\s+|we\s+need\s+to\s+|let\'s\s+make\s+sure\s+to\s+|please\s+|make\s+sure\s+to\s+)',
+        '',
+        cleaned,
+        flags=re.IGNORECASE
+    )
+    cleaned = cleaned.strip(" ,.-;:")
+    if cleaned:
+        # Capitalize first character
+        cleaned = cleaned[0].upper() + cleaned[1:]
+    return cleaned
 
 def extract_tasks_and_summary(transcript: str, team_members: List[dict] = None) -> Dict[str, Any]:
     """
-    Rule-based & NLP action-item extractor (100% Free / Local).
-    Extracts action items, assignees, deadlines, and key summaries.
+    High-precision NLP & heuristic parser for meeting action items, decisions, and executive summaries.
     """
-    sentences = re.split(r'[.!?\n]+', transcript)
-    sentences = [s.strip() for s in sentences if len(s.strip()) > 5]
+    if not transcript or not transcript.strip() or "No audible speech detected" in transcript:
+        return {
+            "summary": "Meeting concluded without audible spoken items.",
+            "key_decisions": ["Session recorded and archived."],
+            "action_items": []
+        }
 
-    action_keywords = [
+    # Normalize whitespace and split on periods, question marks, exclamation marks, or newlines
+    raw_sentences = re.split(r'[.!?\n]+', transcript)
+    sentences = [s.strip() for s in raw_sentences if len(s.strip()) > 3]
+
+    action_verbs = [
+        "deploy", "finish", "create", "review", "update", "send", "fix", "implement",
+        "schedule", "finalize", "prepare", "test", "build", "submit", "write", "organize",
+        "investigate", "document", "deliver", "publish", "merge", "setup", "configure",
+        "verify", "email", "design", "refactor", "audit", "coordinate"
+    ]
+
+    action_triggers = [
         "will", "need to", "needs to", "action item", "todo", "follow up", "assign",
         "should", "must", "going to", "take care of", "responsible for", "handle",
-        "prepare", "finalize", "create", "deploy", "review", "update", "send"
+        "make sure", "let's"
     ]
 
     action_items = []
@@ -68,7 +103,7 @@ def extract_tasks_and_summary(transcript: str, team_members: List[dict] = None) 
             uid = m.get("user_id") or m.get("id")
             name = m.get("name") or (m.get("users", {}) or {}).get("name") or ""
             email = m.get("email") or (m.get("users", {}) or {}).get("email") or ""
-            
+
             if name:
                 member_lookup[name.lower()] = {"id": uid, "name": name}
                 first_name = name.split()[0].lower()
@@ -81,45 +116,63 @@ def extract_tasks_and_summary(transcript: str, team_members: List[dict] = None) 
         s_lower = sentence.lower()
 
         # Decision detection
-        if any(w in s_lower for w in ["decided", "agreed", "decision", "concluded", "approved"]):
-            key_decisions.append(sentence.strip())
+        if any(w in s_lower for w in ["decided", "agreed", "decision", "concluded", "approved", "aligned on"]):
+            clean_decision = clean_action_phrase(sentence)
+            if len(clean_decision) > 10 and clean_decision not in key_decisions:
+                key_decisions.append(clean_decision)
 
-        # Action item detection
-        has_action = any(kw in s_lower for kw in action_keywords)
-        if has_action:
-            # Find matched owner if any member is mentioned
-            matched_owner_id = None
-            matched_owner_name = None
+        # Break complex compound sentences into sub-clauses
+        clauses = re.split(r'\b(and also|and then|additionally|furthermore|as well as)\b', sentence, flags=re.IGNORECASE)
+        # Filter out split delimiters
+        clause_list = [c.strip() for c in clauses if c.strip() and not re.match(r'^(and also|and then|additionally|furthermore|as well as)$', c.strip(), re.IGNORECASE)]
 
-            for key, val in member_lookup.items():
-                if re.search(rf'\b{re.escape(key)}\b', s_lower):
-                    matched_owner_id = val["id"]
-                    matched_owner_name = val["name"]
-                    break
+        for clause in (clause_list if len(clause_list) > 1 else [sentence]):
+            c_lower = clause.lower()
+            has_trigger = any(re.search(rf'\b{re.escape(kw)}\b', c_lower) for kw in action_triggers)
+            has_verb = any(re.search(rf'\b{re.escape(vb)}\b', c_lower) for vb in action_verbs)
 
-            # Clean up task description
-            clean_desc = sentence.strip()
-            # Remove leading speaker prefixes like "Speaker 1:"
-            clean_desc = re.sub(r'^(speaker\s*\d+|[a-zA-Z\s]+):\s*', '', clean_desc, flags=re.IGNORECASE)
+            if has_trigger or has_verb:
+                # Find owner match
+                matched_owner_id = None
+                matched_owner_name = None
 
-            deadline = parse_deadline_from_text(sentence)
+                for key, val in member_lookup.items():
+                    if re.search(rf'\b{re.escape(key)}\b', c_lower):
+                        matched_owner_id = val["id"]
+                        matched_owner_name = val["name"]
+                        break
 
-            action_items.append({
-                "task_description": clean_desc,
-                "owner_id": matched_owner_id,
-                "owner_name": matched_owner_name or "Unassigned",
-                "deadline": deadline
-            })
+                clean_desc = clean_action_phrase(clause)
+                # Limit description to reasonable length
+                if len(clean_desc) > 140:
+                    clean_desc = clean_desc[:137].rsplit(' ', 1)[0] + '...'
 
-    # Generate summary
+                deadline = parse_deadline_from_text(clause)
+
+                if len(clean_desc) >= 8:
+                    # Avoid exact duplicate task descriptions
+                    if not any(a["task_description"].lower() == clean_desc.lower() for a in action_items):
+                        action_items.append({
+                            "task_description": clean_desc,
+                            "owner_id": matched_owner_id,
+                            "owner_name": matched_owner_name or "Unassigned",
+                            "deadline": deadline
+                        })
+
+    # Generate professional executive summary
     if len(sentences) > 0:
-        summary_sentences = sentences[:3]
-        summary = " ".join(summary_sentences)
+        # Take the most informative sentences
+        summary_parts = []
+        for s in sentences[:4]:
+            cleaned_s = re.sub(r'^(speaker\s*\d+|[a-zA-Z\s]+):\s*', '', s, flags=re.IGNORECASE).strip()
+            if len(cleaned_s) > 10 and cleaned_s not in summary_parts:
+                summary_parts.append(cleaned_s)
+        summary = ". ".join(summary_parts) + "."
     else:
-        summary = "Meeting concluded with key operational discussions and follow-up assignments."
+        summary = "Meeting concluded with team synchronization and task alignment."
 
     if not key_decisions:
-        key_decisions = ["Team aligned on milestone deliverables and scheduled next sync."]
+        key_decisions = ["Team aligned on current sprint deliverables and next milestone review."]
 
     return {
         "summary": summary,

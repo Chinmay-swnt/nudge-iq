@@ -11,13 +11,159 @@ class SupabaseService {
 
   SupabaseClient get client => Supabase.instance.client;
   User? get currentUser => client.auth.currentUser;
-  String? get currentUserId => client.auth.currentUser?.id;
+  String? get currentUserId => isDemoMode ? 'demo-user-123' : client.auth.currentUser?.id;
+
+  bool _isDemoMode = false;
+  bool get isDemoMode => _isDemoMode;
+
+  final ValueNotifier<bool> authNotifier = ValueNotifier<bool>(false);
+
+  // In-memory demo data store so users can interact with tasks/meetings seamlessly in Demo Mode
+  final List<Team> _demoTeams = [
+    Team(id: 'demo-team-1', name: '🚀 Engineering Core', role: 'owner', createdAt: DateTime.now().subtract(const Duration(days: 30))),
+    Team(id: 'demo-team-2', name: '🎨 Product & Design', role: 'member', createdAt: DateTime.now().subtract(const Duration(days: 20))),
+    Team(id: 'demo-team-3', name: '📢 Growth & Marketing', role: 'member', createdAt: DateTime.now().subtract(const Duration(days: 10))),
+  ];
+
+  late List<TaskItem> _demoTasks;
+  late List<Meeting> _demoMeetings;
+
+  void _initDemoDataIfNeeded() {
+    final now = DateTime.now();
+    _demoTasks = [
+      TaskItem(
+        id: 'task-1',
+        actionItemId: 'action-1',
+        status: 'in_progress',
+        taskDescription: 'Finalize Q4 API architecture documentation and database schema',
+        ownerId: 'demo-user-123',
+        ownerName: 'Alex Demo',
+        ownerEmail: 'alex.demo@nudgeiq.com',
+        deadline: now.add(const Duration(days: 2)),
+        meetingId: 'meet-1',
+        meetingTitle: 'Sprint 24 Planning & Architecture Sync',
+        teamId: 'demo-team-1',
+        teamName: '🚀 Engineering Core',
+        createdAt: now.subtract(const Duration(hours: 4)),
+      ),
+      TaskItem(
+        id: 'task-2',
+        actionItemId: 'action-2',
+        status: 'todo',
+        taskDescription: 'Deploy PostgreSQL database indexes and performance test',
+        ownerId: 'demo-user-123',
+        ownerName: 'Alex Demo',
+        ownerEmail: 'alex.demo@nudgeiq.com',
+        deadline: now.add(const Duration(days: 1)),
+        meetingId: 'meet-1',
+        meetingTitle: 'Sprint 24 Planning & Architecture Sync',
+        teamId: 'demo-team-1',
+        teamName: '🚀 Engineering Core',
+        createdAt: now.subtract(const Duration(hours: 5)),
+      ),
+      TaskItem(
+        id: 'task-3',
+        actionItemId: 'action-3',
+        status: 'done',
+        taskDescription: 'Review Figma wireframes and mobile task detail specs',
+        ownerId: 'demo-user-123',
+        ownerName: 'Alex Demo',
+        ownerEmail: 'alex.demo@nudgeiq.com',
+        deadline: now.subtract(const Duration(days: 1)),
+        meetingId: 'meet-2',
+        meetingTitle: 'Product Roadmap & UX Design Alignment',
+        teamId: 'demo-team-2',
+        teamName: '🎨 Product & Design',
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+      TaskItem(
+        id: 'task-4',
+        actionItemId: 'action-4',
+        status: 'todo',
+        taskDescription: 'Submit weekly team summary metrics and release notes',
+        ownerId: 'demo-user-123',
+        ownerName: 'Alex Demo',
+        ownerEmail: 'alex.demo@nudgeiq.com',
+        deadline: now.subtract(const Duration(days: 2)), // Overdue
+        meetingId: 'meet-3',
+        meetingTitle: 'Weekly Engineering & Operations Standup',
+        teamId: 'demo-team-1',
+        teamName: '🚀 Engineering Core',
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+      TaskItem(
+        id: 'task-5',
+        actionItemId: 'action-5',
+        status: 'in_progress',
+        taskDescription: 'Prepare product launch email campaign & analytics tracking',
+        ownerId: 'demo-user-123',
+        ownerName: 'Alex Demo',
+        ownerEmail: 'alex.demo@nudgeiq.com',
+        deadline: now.add(const Duration(days: 5)),
+        meetingId: 'meet-4',
+        meetingTitle: 'Marketing Campaign Launch Sync',
+        teamId: 'demo-team-3',
+        teamName: '📢 Growth & Marketing',
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+    ];
+
+    _demoMeetings = [
+      Meeting(
+        id: 'meet-1',
+        teamId: 'demo-team-1',
+        teamName: '🚀 Engineering Core',
+        title: 'Sprint 24 Planning & Architecture Sync',
+        meetingDate: now.subtract(const Duration(hours: 4)),
+        status: 'processed',
+        actionItemsCount: 3,
+        rawTranscript: 'Sprint planning transcript ready',
+      ),
+      Meeting(
+        id: 'meet-2',
+        teamId: 'demo-team-2',
+        teamName: '🎨 Product & Design',
+        title: 'Product Roadmap & UX Design Alignment',
+        meetingDate: now.subtract(const Duration(days: 2)),
+        status: 'processed',
+        actionItemsCount: 2,
+        rawTranscript: 'Product design review transcript ready',
+      ),
+      Meeting(
+        id: 'meet-3',
+        teamId: 'demo-team-1',
+        teamName: '🚀 Engineering Core',
+        title: 'Weekly Engineering & Operations Standup',
+        meetingDate: now.subtract(const Duration(days: 3)),
+        status: 'processed',
+        actionItemsCount: 2,
+        rawTranscript: 'Weekly standup transcript ready',
+      ),
+      Meeting(
+        id: 'meet-4',
+        teamId: 'demo-team-3',
+        teamName: '📢 Growth & Marketing',
+        title: 'Marketing Campaign Launch Sync',
+        meetingDate: now.subtract(const Duration(days: 5)),
+        status: 'processed',
+        actionItemsCount: 1,
+        rawTranscript: 'Marketing campaign sync transcript ready',
+      ),
+    ];
+  }
 
   // ==========================================
   // Auth Operations
   // ==========================================
 
+  void enableDemoMode() {
+    _isDemoMode = true;
+    _initDemoDataIfNeeded();
+    authNotifier.value = true;
+  }
+
   Future<void> signInWithGoogle() async {
+    _isDemoMode = false;
     await client.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: kIsWeb ? null : 'io.supabase.nudgeiq://login-callback',
@@ -25,7 +171,26 @@ class SupabaseService {
   }
 
   Future<void> signOut() async {
-    await client.auth.signOut();
+    _isDemoMode = false;
+    authNotifier.value = false;
+    try {
+      await client.auth.signOut();
+    } catch (e) {
+      debugPrint('[SupabaseService] Sign out error: $e');
+    }
+  }
+
+  String get currentUserName {
+    if (isDemoMode) return 'Alex Demo';
+    final user = currentUser;
+    return user?.userMetadata?['full_name'] as String? ??
+        user?.userMetadata?['name'] as String? ??
+        'Team Member';
+  }
+
+  String get currentUserEmail {
+    if (isDemoMode) return 'alex.demo@nudgeiq.com';
+    return currentUser?.email ?? 'No email associated';
   }
 
   // ==========================================
@@ -33,6 +198,10 @@ class SupabaseService {
   // ==========================================
 
   Future<List<Team>> fetchUserTeams() async {
+    if (isDemoMode) {
+      return _demoTeams;
+    }
+
     if (currentUserId == null) return [];
 
     try {
@@ -60,10 +229,17 @@ class SupabaseService {
   // ==========================================
 
   Future<List<TaskItem>> fetchMyTasks({String? teamId}) async {
+    if (isDemoMode) {
+      _initDemoDataIfNeeded();
+      if (teamId != null && teamId.isNotEmpty) {
+        return _demoTasks.where((t) => t.teamId == teamId).toList();
+      }
+      return List.from(_demoTasks);
+    }
+
     if (currentUserId == null) return [];
 
     try {
-      // 1. Fetch action items owned by the current user
       var query = client.from('action_items').select('''
         id,
         meeting_id,
@@ -143,6 +319,30 @@ class SupabaseService {
   }
 
   Future<bool> updateTaskStatus(String taskId, String newStatus) async {
+    if (isDemoMode) {
+      final index = _demoTasks.indexWhere((t) => t.id == taskId);
+      if (index != -1) {
+        final existing = _demoTasks[index];
+        _demoTasks[index] = TaskItem(
+          id: existing.id,
+          actionItemId: existing.actionItemId,
+          status: newStatus,
+          taskDescription: existing.taskDescription,
+          ownerId: existing.ownerId,
+          ownerName: existing.ownerName,
+          ownerEmail: existing.ownerEmail,
+          deadline: existing.deadline,
+          meetingId: existing.meetingId,
+          meetingTitle: existing.meetingTitle,
+          teamId: existing.teamId,
+          teamName: existing.teamName,
+          reminderSentAt: existing.reminderSentAt,
+          createdAt: existing.createdAt,
+        );
+      }
+      return true;
+    }
+
     try {
       await client.from('tasks').update({'status': newStatus}).eq('id', taskId);
       return true;
@@ -158,12 +358,35 @@ class SupabaseService {
     String? meetingId,
     DateTime? deadline,
   }) async {
+    if (isDemoMode) {
+      final team = _demoTeams.firstWhere(
+        (t) => t.id == teamId,
+        orElse: () => _demoTeams.first,
+      );
+      final newTask = TaskItem(
+        id: 'demo-task-${DateTime.now().millisecondsSinceEpoch}',
+        actionItemId: 'demo-action-${DateTime.now().millisecondsSinceEpoch}',
+        status: 'todo',
+        taskDescription: taskDescription,
+        ownerId: 'demo-user-123',
+        ownerName: 'Alex Demo',
+        ownerEmail: 'alex.demo@nudgeiq.com',
+        deadline: deadline,
+        meetingId: meetingId ?? 'meet-manual',
+        meetingTitle: 'Mobile Quick Task',
+        teamId: team.id,
+        teamName: team.name,
+        createdAt: DateTime.now(),
+      );
+      _demoTasks.insert(0, newTask);
+      return true;
+    }
+
     if (currentUserId == null) return false;
 
     try {
       String activeMeetingId = meetingId ?? '';
 
-      // Create fallback meeting if none provided
       if (activeMeetingId.isEmpty) {
         final meetingRes = await client.from('meetings').insert({
           'team_id': teamId,
@@ -175,7 +398,6 @@ class SupabaseService {
         activeMeetingId = meetingRes['id'] as String;
       }
 
-      // 1. Insert action item
       final actionItemRes = await client.from('action_items').insert({
         'meeting_id': activeMeetingId,
         'task_description': taskDescription,
@@ -187,7 +409,6 @@ class SupabaseService {
 
       final actionItemId = actionItemRes['id'] as String;
 
-      // 2. Insert linked task in 'todo' status
       await client.from('tasks').insert({
         'action_item_id': actionItemId,
         'status': 'todo',
@@ -205,6 +426,14 @@ class SupabaseService {
   // ==========================================
 
   Future<List<Meeting>> fetchMeetings({String? teamId}) async {
+    if (isDemoMode) {
+      _initDemoDataIfNeeded();
+      if (teamId != null && teamId.isNotEmpty) {
+        return _demoMeetings.where((m) => m.teamId == teamId).toList();
+      }
+      return List.from(_demoMeetings);
+    }
+
     try {
       var query = client.from('meetings').select('''
         id,
@@ -234,6 +463,57 @@ class SupabaseService {
   }
 
   Future<Map<String, dynamic>?> fetchMeetingDetail(String meetingId) async {
+    if (isDemoMode) {
+      return {
+        'id': meetingId,
+        'title': 'Sprint 24 Planning & Architecture Sync',
+        'meeting_date': DateTime.now().subtract(const Duration(hours: 4)).toIso8601String(),
+        'status': 'processed',
+        'teams': {'id': 'demo-team-1', 'name': '🚀 Engineering Core'},
+        'transcripts': [
+          {
+            'raw_text':
+                'The team aligned on the upcoming sprint deliverables. Alex will finalize the Q4 API architecture and database schema by tomorrow. Jordan will deploy the PostgreSQL indexes and verify query execution times. We also agreed to schedule client demo sessions on Friday.',
+            'diarized_json': [
+              {
+                'speaker': 'Alex (Lead)',
+                'time': '00:00 - 00:25',
+                'text': 'Welcome everyone. Today we need to lock down our Q4 database schemas and sprint timeline.'
+              },
+              {
+                'speaker': 'Jordan (Backend)',
+                'time': '00:26 - 00:55',
+                'text': 'I will deploy the PostgreSQL indexes tomorrow morning and run load tests on the endpoints.'
+              },
+              {
+                'speaker': 'Alex (Lead)',
+                'time': '00:56 - 01:20',
+                'text': 'Great. I will document the complete API architecture before Thursday standup.'
+              }
+            ]
+          }
+        ],
+        'action_items': [
+          {
+            'id': 'action-1',
+            'task_description': 'Finalize Q4 API architecture documentation and database schema',
+            'deadline': DateTime.now().add(const Duration(days: 2)).toIso8601String().split('T')[0],
+            'owner_id': 'demo-user-123',
+            'users': {'name': 'Alex Demo', 'email': 'alex.demo@nudgeiq.com'},
+            'tasks': [{'id': 'task-1', 'status': 'in_progress'}]
+          },
+          {
+            'id': 'action-2',
+            'task_description': 'Deploy PostgreSQL database indexes and performance test',
+            'deadline': DateTime.now().add(const Duration(days: 1)).toIso8601String().split('T')[0],
+            'owner_id': 'demo-user-123',
+            'users': {'name': 'Jordan Tech', 'email': 'jordan@nudgeiq.com'},
+            'tasks': [{'id': 'task-2', 'status': 'todo'}]
+          }
+        ]
+      };
+    }
+
     try {
       final meetingRes = await client.from('meetings').select('''
         id,

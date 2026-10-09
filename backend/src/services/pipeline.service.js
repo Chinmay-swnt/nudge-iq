@@ -11,7 +11,7 @@ const { extractActionItems } = require("./llmExtraction.service");
  * @param {string} [params.transcriptUrl]
  * @returns {Promise<Object>}
  */
-async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl }) {
+async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl, preloadedTranscript }) {
   console.log(`[pipeline.service] Starting AI processing for meeting: ${meetingId} (team: ${teamId})`);
 
   try {
@@ -25,11 +25,35 @@ async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl
       teamMembers = data || [];
     }
 
-    // 2. Run Free Speech-to-Text
-    const audioSource = audioData || transcriptUrl;
-    const { raw_text, diarized_json } = await transcribeAudio(audioSource);
+    // 2. Speech-to-Text or Live Transcripts
+    let raw_text = "";
+    let diarized_json = [];
 
-    console.log(`[pipeline.service] Transcription completed (${raw_text?.length || 0} chars)`);
+    // Try Faster-Whisper audio transcription first if real audio buffer is provided
+    if (audioData || transcriptUrl) {
+      try {
+        const audioSource = audioData || transcriptUrl;
+        const result = await transcribeAudio(audioSource, "meeting_recording.webm");
+        if (result && result.raw_text && result.raw_text.trim().length > 0 && !result.raw_text.includes("No audible speech detected")) {
+          raw_text = result.raw_text;
+          diarized_json = result.diarized_json || [];
+        }
+      } catch (e) {
+        console.warn("[pipeline.service] Audio transcription failed, checking for live captions:", e.message);
+      }
+    }
+
+    // Fallback to preloaded live captions (from Google Meet / Zoom CC scraper)
+    if (!raw_text && preloadedTranscript && preloadedTranscript.raw_text) {
+      raw_text = preloadedTranscript.raw_text;
+      diarized_json = preloadedTranscript.diarized_json || [];
+    }
+
+    if (!raw_text) {
+      raw_text = "No audible speech or action items detected during this session.";
+    }
+
+    console.log(`[pipeline.service] Transcription ready (${raw_text?.length || 0} chars)`);
 
     // 3. Run Free LLM / NLP Action Item Extraction
     const extractionResult = await extractActionItems(raw_text, teamMembers);
