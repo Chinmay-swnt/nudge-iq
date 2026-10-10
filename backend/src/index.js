@@ -45,7 +45,25 @@ process.on("uncaughtException", (err) => {
   console.error("[backend] Uncaught Exception:", err);
 });
 
+const { evaluateAndDispatchReminders } = require("./services/reminder.service");
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
+
+  // Automated Deadline Sweep Cron (Runs periodically in the background)
+  const SWEEP_INTERVAL_MS = parseInt(process.env.REMINDER_SWEEP_INTERVAL_MS, 10) || 60 * 60 * 1000; // Default: 1 hour
+  if (process.env.ENABLE_AUTO_SWEEP !== "false") {
+    console.log(`[cron] Automated reminder sweep enabled (interval: ${Math.round(SWEEP_INTERVAL_MS / 1000 / 60)}m).`);
+    setInterval(async () => {
+      try {
+        const result = await evaluateAndDispatchReminders();
+        if (result && result.dispatchedNudges > 0) {
+          console.log(`[cron] Automated sweep finished: evaluated ${result.evaluatedTasks} tasks, dispatched ${result.dispatchedNudges} nudges.`);
+        }
+      } catch (err) {
+        console.warn("[cron] Automated reminder sweep notice:", err.message);
+      }
+    }, SWEEP_INTERVAL_MS);
+  }
 });
