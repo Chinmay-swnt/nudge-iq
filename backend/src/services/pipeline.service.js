@@ -82,11 +82,12 @@ async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl
     const extractionResult = await extractActionItems(raw_text, teamMembers);
     console.log(`[pipeline.service] Extracted ${extractionResult.action_items.length} action items`);
 
-    // Structure transcript metadata to preserve summary & key decisions in all schema configurations
+    // Structure transcript metadata to preserve summary, key decisions, & action item quotes
     const transcriptPayload = {
       dialogue: Array.isArray(diarized_json) ? diarized_json : [],
       summary: extractionResult.summary,
       key_decisions: extractionResult.key_decisions || [],
+      action_items_meta: extractionResult.action_items || [],
     };
 
     // 5. Update Database
@@ -120,16 +121,37 @@ async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl
 
       // 5c. Insert Action Items and Tasks
       for (const item of extractionResult.action_items) {
-        const { data: actionItem, error: actionItemError } = await client
+        const insertPayload = {
+          meeting_id: meetingId,
+          task_description: item.task_description,
+          owner_id: item.owner_id || null,
+          deadline: item.deadline || null,
+          source_quote: item.source_quote || item.task_description,
+          needs_review: !item.owner_id,
+          created_by: "ai",
+        };
+
+        let { data: actionItem, error: actionItemError } = await client
           .from("action_items")
-          .insert({
-            meeting_id: meetingId,
-            task_description: item.task_description,
-            owner_id: item.owner_id || null,
-            deadline: item.deadline || null,
-          })
+          .insert(insertPayload)
           .select()
           .single();
+
+        if (actionItemError && (actionItemError.code === "42703" || String(actionItemError.message).includes("column"))) {
+          // Schema fallback if optional migration columns are absent
+          const fb = await client
+            .from("action_items")
+            .insert({
+              meeting_id: meetingId,
+              task_description: item.task_description,
+              owner_id: item.owner_id || null,
+              deadline: item.deadline || null,
+            })
+            .select()
+            .single();
+          actionItem = fb.data;
+          actionItemError = fb.error;
+        }
 
         if (actionItem && !actionItemError) {
           await client.from("tasks").insert({

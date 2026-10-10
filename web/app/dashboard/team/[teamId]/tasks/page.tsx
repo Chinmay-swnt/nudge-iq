@@ -26,15 +26,23 @@ export default async function TeamTasksPage({
   const meetingIds = meetings?.map((m) => m.id) || [];
 
   // 3. Fetch action items & owners for this team's meetings
-  const { data: actionItems } = meetingIds.length
+  let actionItemsRes: any = meetingIds.length
     ? await supabase
         .from("action_items")
-        .select("id, meeting_id, task_description, deadline, owner_id, users:owner_id(id, name, email)")
+        .select("id, meeting_id, task_description, deadline, owner_id, created_by, users:owner_id(id, name, email)")
         .in("meeting_id", meetingIds)
     : { data: [] };
 
-  const actionItemMap = new Map((actionItems || []).map((ai: any) => [ai.id, ai]));
-  const actionItemIds = (actionItems || []).map((a: any) => a.id);
+  if (actionItemsRes?.error && actionItemsRes.error.code === "42703") {
+    actionItemsRes = await supabase
+      .from("action_items")
+      .select("id, meeting_id, task_description, deadline, owner_id, users:owner_id(id, name, email)")
+      .in("meeting_id", meetingIds);
+  }
+
+  const actionItems = actionItemsRes.data || [];
+  const actionItemMap = new Map(actionItems.map((ai: any) => [ai.id, ai]));
+  const actionItemIds = actionItems.map((a: any) => a.id);
 
   // 4. Fetch tasks
   const { data: tasks } = actionItemIds.length
@@ -57,6 +65,7 @@ export default async function TeamTasksPage({
             deadline: ai.deadline,
             owner_id: ai.owner_id,
             owner: ai.users || null,
+            created_by: ai.created_by ?? "ai",
           }
         : null,
     };

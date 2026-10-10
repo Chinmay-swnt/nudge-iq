@@ -155,6 +155,7 @@ CRITICAL INSTRUCTIONS:
    - Write clear, professional imperative task descriptions (e.g. "Finish testing the NudgeIQ port", "Create agenda for next meeting", "Run backend test suite").
    - Assign each task to the most appropriate team member from the Team Members list below. If the speaker refers to themselves ("I will...", "I am doing...", "first I will...", "as the host...") and a team member/host is listed, assign the task to that person with their matching ID.
    - If a specific deadline was stated, compute the ISO date (YYYY-MM-DD) relative to today ({today_str}). If no specific deadline was mentioned, set deadline to null.
+   - source_quote: Extract the exact sentence or spoken words from the transcript where this commitment was mentioned.
 
 TEAM MEMBERS:
 {members_block}
@@ -168,7 +169,8 @@ YOU MUST RESPOND WITH STRICT, VALID JSON ONLY conforming to this schema:
       "task_description": "imperative task description",
       "owner_name": "Name of assigned person",
       "owner_id": "matching user ID from Team Members",
-      "deadline": "YYYY-MM-DD or null"
+      "deadline": "YYYY-MM-DD or null",
+      "source_quote": "exact sentence or spoken words from transcript"
     }}
   ]
 }}"""
@@ -234,11 +236,16 @@ YOU MUST RESPOND WITH STRICT, VALID JSON ONLY conforming to this schema:
             else:
                 deadline_val = None
 
+            source_quote_val = (item.get("source_quote") or "").strip()
+
             cleaned_action_items.append({
                 "task_description": desc,
                 "owner_id": resolved_uid,
                 "owner_name": resolved_name,
-                "deadline": deadline_val
+                "deadline": deadline_val,
+                "source_quote": source_quote_val or desc,
+                "needs_review": resolved_uid is None,
+                "created_by": "ai"
             })
 
         print(f"[extract] Local LLM succeeded: {len(cleaned_action_items)} action items extracted.")
