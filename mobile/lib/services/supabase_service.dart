@@ -240,6 +240,20 @@ class SupabaseService {
     if (currentUserId == null) return [];
 
     try {
+      // Step 1: If filtering by team, get meeting IDs for that team first
+      List<String>? meetingIds;
+      if (teamId != null && teamId.isNotEmpty) {
+        final meetingsRes = await client
+            .from('meetings')
+            .select('id')
+            .eq('team_id', teamId);
+        meetingIds = (meetingsRes as List<dynamic>)
+            .map((m) => m['id'] as String)
+            .toList();
+        if (meetingIds.isEmpty) return [];
+      }
+
+      // Step 2: Query action_items owned by current user, optionally scoped to meeting IDs
       var query = client.from('action_items').select('''
         id,
         meeting_id,
@@ -266,8 +280,8 @@ class SupabaseService {
         )
       ''').eq('owner_id', currentUserId!);
 
-      if (teamId != null && teamId.isNotEmpty) {
-        query = query.eq('meetings.team_id', teamId);
+      if (meetingIds != null) {
+        query = query.inFilter('meeting_id', meetingIds);
       }
 
       final response = await query;
@@ -469,6 +483,7 @@ class SupabaseService {
         'title': 'Sprint 24 Planning & Architecture Sync',
         'meeting_date': DateTime.now().subtract(const Duration(hours: 4)).toIso8601String(),
         'status': 'processed',
+        'summary': '• Team aligned on Q4 database schema and API architecture deliverables.\n• Jordan will deploy PostgreSQL indexes and run load tests tomorrow morning.\n• Alex will document the complete API architecture before Thursday standup.\n• Client demo sessions scheduled for Friday afternoon.',
         'teams': {'id': 'demo-team-1', 'name': '🚀 Engineering Core'},
         'transcripts': [
           {
@@ -522,6 +537,7 @@ class SupabaseService {
         meeting_date,
         transcript_url,
         status,
+        summary,
         created_at,
         teams(id, name),
         transcripts(id, raw_text, diarized_json),
