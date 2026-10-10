@@ -137,9 +137,13 @@ async function runPhase2AcceptanceCheck() {
     });
 
     const { createClient } = require("@supabase/supabase-js");
-    const webEnv = fs.readFileSync(path.resolve(__dirname, "../web/.env.local"), "utf8");
-    const anon = (webEnv.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=([^\r\n]+)/) || [])[1] || "";
-    const clientA = createClient(process.env.SUPABASE_URL, anon);
+    let anon = process.env.SUPABASE_ANON_KEY;
+    const webEnvPath = path.resolve(__dirname, "../web/.env.local");
+    if (fs.existsSync(webEnvPath)) {
+      const webEnv = fs.readFileSync(webEnvPath, "utf8");
+      anon = (webEnv.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=([^\r\n]+)/) || [])[1] || anon;
+    }
+    const clientA = createClient(process.env.SUPABASE_URL, anon, { auth: { persistSession: false } });
     const { data: sessA } = await clientA.auth.verifyOtp({
       token_hash: linkA.properties.hashed_token,
       type: "email",

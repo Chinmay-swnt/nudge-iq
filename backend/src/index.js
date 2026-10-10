@@ -5,6 +5,7 @@ require("dotenv").config();
 const hardwareRoutes = require("./routes/hardware.routes");
 const meetingPipelineRoutes = require("./routes/meetingPipeline.routes");
 const meetingsRoutes = require("./routes/meetings.routes");
+const reminderRoutes = require("./routes/reminder.routes");
 
 const app = express();
 
@@ -18,6 +19,9 @@ app.get("/health", (req, res) => {
 
 // Phase 2 Meetings & Audio Upload routes
 app.use("/api/meetings", meetingsRoutes);
+
+// Phase 4 Task Nudges & Automated Reminders
+app.use("/api/reminders", reminderRoutes);
 
 // Hardware ingestion integration routes
 app.use("/meetings", hardwareRoutes);

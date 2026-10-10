@@ -2,7 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const { joinMeeting, stopMeetingBot, getActiveBots } = require("../services/bot.service");
 const { processMeetingAudio } = require("../services/pipeline.service");
-const { supabase } = require("../services/supabase.service");
+const { supabase, supabaseAdmin } = require("../services/supabase.service");
 
 const router = express.Router();
 const upload = multer({
@@ -59,30 +59,71 @@ router.post("/process-audio", upload.single("audio_file"), async (req, res) => {
       return res.status(400).json({ error: "team_id is required" });
     }
 
+    const client = supabaseAdmin || supabase;
     let activeMeetingId = meeting_id;
 
     // Create meeting record if not supplied
-    if (!activeMeetingId && supabase) {
+    if (!activeMeetingId && client) {
       const meetingTitle = title || file?.originalname?.replace(/\.[^/.]+$/, "") || "Uploaded Audio Discussion";
-      const { data: newMeeting, error: createError } = await supabase
+      let createRes = await client
         .from("meetings")
         .insert({
           team_id,
           title: meetingTitle,
           meeting_date: new Date().toISOString(),
           status: "pending",
+          processing_status: "created",
         })
         .select()
         .single();
 
-      if (createError) {
-        return res.status(500).json({ error: createError.message });
+      if (createRes.error && (createRes.error.code === "42703" || String(createRes.error.message).includes("column"))) {
+        createRes = await client
+          .from("meetings")
+          .insert({
+            team_id,
+            title: meetingTitle,
+            meeting_date: new Date().toISOString(),
+            status: "pending",
+          })
+          .select()
+          .single();
       }
-      activeMeetingId = newMeeting.id;
+
+      if (createRes.error) {
+        return res.status(500).json({ error: createRes.error.message });
+      }
+      activeMeetingId = createRes.data.id;
     }
 
     if (!activeMeetingId) {
       activeMeetingId = `meeting-${Date.now()}`;
+    }
+
+    // Save audio file to Supabase Storage if provided
+    if (file && client) {
+      try {
+        const sanitizedName = file.originalname ? file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_") : "recording.webm";
+        const storagePath = `${team_id}/${activeMeetingId}/${sanitizedName}`;
+        await client.storage.createBucket("recordings", { public: false }).catch(() => {});
+        await client.storage.from("recordings").upload(storagePath, file.buffer, {
+          contentType: file.mimetype || "audio/webm",
+          upsert: true,
+        });
+
+        await client
+          .from("meetings")
+          .update({
+            audio_path: storagePath,
+            transcript_url: storagePath,
+            status: "uploaded",
+            processing_status: "uploaded",
+          })
+          .eq("id", activeMeetingId)
+          .catch(() => {});
+      } catch (uploadErr) {
+        console.warn("[meetingPipeline.routes] Storage upload notice:", uploadErr.message);
+      }
     }
 
     // Run end-to-end processing pipeline
