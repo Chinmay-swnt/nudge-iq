@@ -179,7 +179,7 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
             ),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              initialValue: _selectedTeamId.isNotEmpty ? _selectedTeamId : widget.teams.first.id,
+              value: _selectedTeamId.isNotEmpty ? _selectedTeamId : widget.teams.first.id,
               items: widget.teams
                   .map(
                     (t) => DropdownMenuItem(

@@ -201,6 +201,62 @@ node test_phase4.js
    Invoke-RestMethod -Uri "http://localhost:8000/llm-status"
    ```
 
+---
 
+## Phase 6 — UI for Results
 
+### What was built
+1. **Interactive Meeting Results View (`web/components/MeetingResultsView.tsx`)**:
+   - **Executive Summary & Key Decisions Card**: High-level bulleted summary and decisions card displayed above meeting transcript and tasks.
+   - **"Needs Review" Section**: Dedicated triage card list for action items flagged with `needs_review: true` or unassigned owner (`owner_id: null`).
+     - Inline editable task description and deadline datepicker.
+     - Owner dropdown selector mapped to verified team members.
+     - **"✓ Approve" Action**: Persists edits to the backend, sets `needs_review = false`, immediately generates/links a corresponding task row in `tasks` with status `'todo'`, and transitions the card into the Assigned Action Items list.
+     - **"✕ Delete" Action**: Deletes the action item and linked tasks with immediate reactive UI removal.
+   - **Assigned Action Items List**: Displays assigned commitments with owner pill, deadline, and an interactive **"🔍 Source Quote"** button.
+   - **Verbatim Transcript with Interactive Quote Highlighting**:
+     - Speaker-labelled dialogue turns with timestamp chips.
+     - Clicking "🔍 Source Quote" on any action item highlights the exact dialogue turn (`source_quote`) with an amber ring & background glow, smoothly auto-scrolling it into view.
 
+2. **Real-Time Processing Polling Badge (`web/components/ProcessingStatusBadge.tsx`)**:
+   - Replaced static status pills on the meeting detail page with an auto-polling badge.
+   - Polls `GET /api/meetings/:meetingId/status` every 5 seconds while meeting is in `transcribing` or `extracting` state.
+   - Automatically triggers Next.js router refresh once processing transitions to `processed`.
+
+3. **Task Board (Kanban) Enhancements (`web/components/TaskCard.tsx` & `tasks/page.tsx`)**:
+   - Shows circular owner avatar badge with team member initials (e.g., "MK", "CS", or "U" for unassigned).
+   - Formatted deadline badge with overdue indicator styling.
+   - Dedicated **"AI EXTRACTED"** badge when `created_by = 'ai'`.
+   - Direct status change dropdown updating `tasks.status` in Supabase in real-time.
+
+4. **Backend API Endpoints (`backend/src/routes/meetings.routes.js`)**:
+   - `GET /api/meetings/:meetingId/status`: Fast, lightweight status polling endpoint for the frontend.
+   - `PATCH /api/meetings/action-items/:id`: Updates task description, owner ID, deadline, and creates linked `tasks` row with status `'todo'`. Includes fallback for DB schema drift (`42703`).
+   - `DELETE /api/meetings/action-items/:id`: Cleanly cascades removal across `tasks` and `action_items`.
+
+### How to test Phase 6
+Run the automated acceptance test script:
+```powershell
+cd backend
+node test_phase6.js
+```
+
+Or manually test in the browser:
+1. Visit a meeting page: `http://localhost:3000/dashboard/team/<teamId>/meetings/<meetingId>`.
+2. Inspect the **"Needs Review"** section: assign an owner from the dropdown and click **"✓ Approve"**.
+3. Verify the item moves to **"Assigned Action Items"**.
+4. Click **"🔍 Source Quote"** to see the verbatim speaker turn highlighted in the transcript.
+5. Navigate to the **Tasks** board: `http://localhost:3000/dashboard/team/<teamId>/tasks` and confirm the task appears with owner initials avatar and AI badge.
+
+---
+
+### Full Regression Suite (All Phases 1–6)
+```powershell
+cd backend
+node test_phase1.js
+node test_phase2.js
+node test_phase3.js
+node test_phase4.js
+node test_phase5.js
+node test_phase6.js
+```

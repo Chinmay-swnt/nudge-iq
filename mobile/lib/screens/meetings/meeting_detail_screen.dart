@@ -65,9 +65,14 @@ class _MeetingDetailScreenState extends State<MeetingDetailScreen> {
     final transcripts = _meetingData!['transcripts'] as List<dynamic>? ?? [];
     final actionItems = _meetingData!['action_items'] as List<dynamic>? ?? [];
 
-    String? summaryText;
-    if (transcripts.isNotEmpty && transcripts.first is Map<String, dynamic>) {
-      summaryText = transcripts.first['raw_text'] as String?;
+    // Prefer AI-generated summary from meetings.summary; fall back to raw transcript
+    String? summaryText = _meetingData!['summary'] as String?;
+    if ((summaryText == null || summaryText.isEmpty) && transcripts.isNotEmpty && transcripts.first is Map<String, dynamic>) {
+      final rawText = transcripts.first['raw_text'] as String?;
+      if (rawText != null && rawText.isNotEmpty) {
+        // Show first 400 chars of raw text as preview if no AI summary available
+        summaryText = rawText.length > 400 ? '${rawText.substring(0, 400)}…' : rawText;
+      }
     }
 
     return Scaffold(

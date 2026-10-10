@@ -1,9 +1,10 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseServer";
-import TaskCard from "@/components/TaskCard";
 import AddMeetingActionItemModal from "@/components/AddMeetingActionItemModal";
 import ProcessNowButton from "@/components/ProcessNowButton";
+import ProcessingStatusBadge from "@/components/ProcessingStatusBadge";
+import MeetingResultsView from "@/components/MeetingResultsView";
 
 export default async function MeetingDetailPage({
   params,
@@ -42,13 +43,24 @@ export default async function MeetingDetailPage({
   const transcript = transcripts?.[0] || null;
 
   // 3. Fetch action items & owners for this meeting
-  const { data: actionItems } = await supabase
+  let actionItemsRes: any = await supabase
     .from("action_items")
-    .select("id, meeting_id, task_description, deadline, owner_id, users:owner_id(id, name, email)")
+    .select(
+      "id, meeting_id, task_description, deadline, owner_id, needs_review, created_by, source_quote, users:owner_id(id, name, email)"
+    )
     .eq("meeting_id", meetingId);
 
-  const actionItemIds = (actionItems || []).map((a: any) => a.id);
-  const actionItemMap = new Map((actionItems || []).map((ai: any) => [ai.id, ai]));
+  if (actionItemsRes.error && actionItemsRes.error.code === "42703") {
+    actionItemsRes = await supabase
+      .from("action_items")
+      .select(
+        "id, meeting_id, task_description, deadline, owner_id, users:owner_id(id, name, email)"
+      )
+      .eq("meeting_id", meetingId);
+  }
+
+  const rawActionItems = actionItemsRes.data || [];
+  const actionItemIds = rawActionItems.map((a: any) => a.id);
 
   // 4. Fetch linked tasks
   const { data: tasks } = actionItemIds.length
@@ -59,19 +71,22 @@ export default async function MeetingDetailPage({
         .order("created_at", { ascending: false })
     : { data: [] };
 
-  const fullTasks = (tasks || []).map((t) => {
-    const ai = actionItemMap.get(t.action_item_id) as any;
+  const actionItemsWithTasks = rawActionItems.map((ai: any) => {
+    const linkedTasks = (tasks || []).filter(
+      (t: any) => t.action_item_id === ai.id
+    );
     return {
-      ...t,
-      action_item: ai
-        ? {
-            id: ai.id,
-            task_description: ai.task_description,
-            deadline: ai.deadline,
-            owner_id: ai.owner_id,
-            owner: ai.users || null,
-          }
-        : null,
+      id: ai.id,
+      meeting_id: ai.meeting_id,
+      task_description: ai.task_description,
+      deadline: ai.deadline,
+      owner_id: ai.owner_id,
+      needs_review:
+        ai.needs_review !== undefined ? ai.needs_review : ai.owner_id == null,
+      created_by: ai.created_by || "ai",
+      source_quote: ai.source_quote || ai.task_description,
+      users: ai.users || null,
+      tasks: linkedTasks,
     };
   });
 
@@ -88,7 +103,8 @@ export default async function MeetingDetailPage({
   }));
 
   // Parse diarized conversation, executive summary, and key decisions
-  let diarizedDialogue: Array<{ speaker: string; text: string; time?: string }> = [];
+  let diarizedDialogue: Array<{ speaker: string; text: string; time?: string }> =
+    [];
   let executiveSummary = meeting.summary || "";
   let keyDecisions: string[] = [];
 
@@ -112,10 +128,11 @@ export default async function MeetingDetailPage({
     executiveSummary = transcript.raw_text;
   }
 
-  const totalTasks = fullTasks.length;
-  const completedTasks = fullTasks.filter((t) => t.status === "done").length;
-  const pendingTasks = fullTasks.filter((t) => t.status !== "done").length;
-  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const totalTasks = (tasks || []).length;
+  const completedTasks = (tasks || []).filter((t: any) => t.status === "done").length;
+  const pendingTasks = (tasks || []).filter((t: any) => t.status !== "done").length;
+  const progressPercent =
+    totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
     <div className="space-y-8 pb-16 max-w-6xl mx-auto">
@@ -140,30 +157,11 @@ export default async function MeetingDetailPage({
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span
-                className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider ${
-                  meeting.status === "processed"
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    : meeting.status === "uploaded" || meeting.processing_status === "uploaded"
-                    ? "bg-blue-50 text-blue-700 border border-blue-200"
-                    : "bg-amber-50 text-amber-700 border border-amber-200 animate-pulse"
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    meeting.status === "processed"
-                      ? "bg-emerald-500"
-                      : meeting.status === "uploaded" || meeting.processing_status === "uploaded"
-                      ? "bg-blue-500"
-                      : "bg-amber-500"
-                  }`}
-                ></span>
-                {meeting.status === "processed"
-                  ? "AI Processed"
-                  : meeting.status === "uploaded" || meeting.processing_status === "uploaded"
-                  ? "Audio Uploaded"
-                  : "Recording Pending"}
-              </span>
+              <ProcessingStatusBadge
+                meetingId={meetingId}
+                initialStatus={meeting.status}
+                initialProcessingStatus={meeting.processing_status}
+              />
 
               <span className="text-xs text-gray-500 bg-[#F8F9FA] px-3 py-1 rounded-full border border-[#E5E5E5] font-medium">
                 📅 {new Date(meeting.meeting_date).toLocaleDateString(undefined, {
@@ -304,94 +302,14 @@ export default async function MeetingDetailPage({
         )}
       </div>
 
-      {/* Action Items Matrix */}
-      <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-[#111111]">Assigned Action Items</h2>
-              <span className="bg-[#0A0A0A] text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                {totalTasks}
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Tasks extracted by AI or logged by team members with real-time status tracking
-            </p>
-          </div>
-
-          <AddMeetingActionItemModal
-            meetingId={meetingId}
-            teamMembers={formattedTeamMembers}
-          />
-        </div>
-
-        {totalTasks === 0 ? (
-          <div className="bg-[#F8F9FA] border border-dashed border-gray-200 rounded-xl p-8 text-center space-y-2">
-            <p className="font-bold text-[#111111] text-sm">No action items recorded for this session</p>
-            <p className="text-xs text-gray-500 max-w-md mx-auto">
-              Click &quot;Add Action Item&quot; above to log commitments manually, or run the recording bot to extract them from live speech.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {fullTasks.map((task) => (
-              <TaskCard key={task.id} task={task} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Diarized Conversation Transcript */}
-      <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
-        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <h2 className="text-lg font-bold text-[#111111]">Verbatim Meeting Transcript</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Time-coded speaker dialogue generated by Faster-Whisper</p>
-          </div>
-          <span className="text-xs font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200">
-            {diarizedDialogue.length > 0 ? `${diarizedDialogue.length} Turns` : "Full Text"}
-          </span>
-        </div>
-
-        {diarizedDialogue.length > 0 ? (
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-            {diarizedDialogue.map((turn, idx) => {
-              const isSpeaker1 = turn.speaker.toLowerCase().includes("1");
-              return (
-                <div
-                  key={idx}
-                  className={`p-4 rounded-xl border transition-colors ${
-                    isSpeaker1
-                      ? "bg-[#F8F9FA] border-[#E5E5E5]"
-                      : "bg-white border-blue-100 shadow-2xs"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-[#111111] flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${isSpeaker1 ? "bg-gray-700" : "bg-[#3B82F6]"}`}></span>
-                      {turn.speaker}
-                    </span>
-                    {turn.time && (
-                      <span className="text-[11px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-                        {turn.time}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">{turn.text}</p>
-                </div>
-              );
-            })}
-          </div>
-        ) : transcript?.raw_text ? (
-          <div className="bg-[#F8F9FA] p-5 rounded-xl border border-[#E5E5E5] text-sm text-gray-700 leading-relaxed font-mono whitespace-pre-line max-h-[400px] overflow-y-auto">
-            {transcript.raw_text}
-          </div>
-        ) : (
-          <div className="bg-[#F8F9FA] border border-dashed border-gray-200 rounded-xl p-8 text-center text-xs text-gray-400">
-            Transcript pending audio ingestion.
-          </div>
-        )}
-      </div>
+      {/* Interactive Action Items, Needs Review, & Verbatim Transcript */}
+      <MeetingResultsView
+        meetingId={meetingId}
+        initialActionItems={actionItemsWithTasks}
+        dialogue={diarizedDialogue}
+        rawText={transcript?.raw_text}
+        teamMembers={formattedTeamMembers}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer');
-const { supabase } = require('./supabase.service');
+const { supabase, supabaseAdmin } = require('./supabase.service');
 const { processMeetingAudio } = require('./pipeline.service');
 
 const activeBots = new Map();
@@ -23,9 +23,10 @@ function formatZoomWebUrl(meetingUrl) {
 async function joinMeeting({ meetingUrl, teamId, title, botName = 'NudgeIQ Note Taker' }) {
   console.log(`[bot.service] Dispatching bot to ${meetingUrl} for team ${teamId}`);
 
+  const client = supabaseAdmin || supabase;
   let meetingId = null;
-  if (supabase) {
-    const { data: newMeeting } = await supabase
+  if (client) {
+    const { data: newMeeting } = await client
       .from('meetings')
       .insert({
         team_id: teamId,

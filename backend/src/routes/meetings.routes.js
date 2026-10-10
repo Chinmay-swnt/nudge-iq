@@ -325,4 +325,121 @@ router.post("/:meetingId/reprocess", async (req, res) => {
   }
 });
 
+/**
+ * 5. Get meeting processing status (for fast polling)
+ * GET /api/meetings/:meetingId/status
+ */
+router.get("/:meetingId/status", async (req, res) => {
+  try {
+    const { meetingId } = req.params;
+    let { data: meeting, error } = await supabaseAdmin
+      .from("meetings")
+      .select("id, status, processing_status, error_message, summary")
+      .eq("id", meetingId)
+      .single();
+
+    if (error && (error.code === "42703" || String(error.message).includes("column"))) {
+      const fb = await supabaseAdmin
+        .from("meetings")
+        .select("id, status")
+        .eq("id", meetingId)
+        .single();
+      meeting = fb.data;
+      error = fb.error;
+    }
+
+    if (error || !meeting) {
+      return res.status(404).json({ error: "Meeting not found" });
+    }
+
+    return res.status(200).json({
+      meetingId: meeting.id,
+      status: meeting.status,
+      processing_status: meeting.processing_status || meeting.status,
+      error_message: meeting.error_message || null,
+      summary: meeting.summary || null,
+    });
+  } catch (err) {
+    console.error("[meetings.routes] GET /:meetingId/status error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * 6. Update / Approve action item
+ * PATCH /api/meetings/action-items/:id
+ */
+router.patch("/action-items/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { task_description, owner_id, deadline, needs_review } = req.body;
+
+    const updatePayload = {};
+    if (task_description !== undefined) updatePayload.task_description = task_description.trim();
+    if (owner_id !== undefined) updatePayload.owner_id = owner_id || null;
+    if (deadline !== undefined) updatePayload.deadline = deadline || null;
+    if (needs_review !== undefined) updatePayload.needs_review = Boolean(needs_review);
+
+    let { data: updatedItem, error } = await supabaseAdmin
+      .from("action_items")
+      .update(updatePayload)
+      .eq("id", id)
+      .select("*, users:owner_id(id, name, email)")
+      .single();
+
+    if (error && (error.code === "42703" || String(error.message).includes("column"))) {
+      delete updatePayload.needs_review;
+      const fb = await supabaseAdmin
+        .from("action_items")
+        .update(updatePayload)
+        .eq("id", id)
+        .select("id, meeting_id, task_description, deadline, owner_id, users:owner_id(id, name, email)")
+        .single();
+      updatedItem = fb.data;
+      error = fb.error;
+    }
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    // Ensure linked task exists
+    const { data: existingTasks } = await supabaseAdmin
+      .from("tasks")
+      .select("id")
+      .eq("action_item_id", id);
+
+    if (!existingTasks || existingTasks.length === 0) {
+      await supabaseAdmin.from("tasks").insert({
+        action_item_id: id,
+        status: "todo",
+      });
+    }
+
+    return res.status(200).json({ success: true, action_item: updatedItem });
+  } catch (err) {
+    console.error("[meetings.routes] PATCH /action-items/:id error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * 7. Delete action item
+ * DELETE /api/meetings/action-items/:id
+ */
+router.delete("/action-items/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await supabaseAdmin.from("tasks").delete().eq("action_item_id", id);
+    const { error } = await supabaseAdmin.from("action_items").delete().eq("id", id);
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.status(200).json({ success: true, deleted_id: id });
+  } catch (err) {
+    console.error("[meetings.routes] DELETE /action-items/:id error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

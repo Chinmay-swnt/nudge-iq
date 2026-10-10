@@ -13,6 +13,7 @@ interface TaskItem {
     task_description: string;
     deadline?: string | null;
     owner_id?: string | null;
+    created_by?: string | null;
     owner?: {
       name?: string | null;
       email?: string | null;
@@ -30,6 +31,13 @@ const STATUS_OPTIONS = [
   { value: "done", label: "Done" },
   { value: "overdue", label: "Overdue" },
 ];
+
+function getInitials(name: string) {
+  if (!name || name === "Unassigned") return "U";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 export default function TaskCard({ task }: TaskCardProps) {
   const [status, setStatus] = useState(task.status);
@@ -102,30 +110,48 @@ export default function TaskCard({ task }: TaskCardProps) {
     task.action_item?.owner?.email ||
     "Unassigned";
 
+  const isAI = task.action_item?.created_by === "ai" || !task.action_item?.created_by;
+
   return (
     <div className="bg-white border border-[#E5E5E5] rounded-xl p-4 shadow-xs hover:shadow-sm transition-shadow flex flex-col justify-between gap-3">
       <div>
-        <p className="text-sm font-medium text-[#111111] leading-snug">
-          {task.action_item?.task_description || "Untitled task"}
-        </p>
-
-        <div className="flex flex-wrap items-center gap-2 mt-3 text-xs text-gray-500">
-          <div className="flex items-center gap-1.5 bg-[#F8F9FA] px-2 py-1 rounded-md border border-[#E5E5E5]">
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-            <span className="truncate max-w-[120px]">{ownerName}</span>
-          </div>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          {isAI ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+              AI EXTRACTED
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-50 text-gray-600 border border-gray-200">
+              MANUAL
+            </span>
+          )}
 
           {task.action_item?.deadline && (
             <div
-              className={`flex items-center gap-1 px-2 py-1 rounded-md border text-xs ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-medium ${
                 isOverdue
-                  ? "bg-red-50 text-red-600 border-red-200"
+                  ? "bg-red-50 text-red-600 border-red-200 font-semibold"
                   : "bg-gray-50 text-gray-600 border-gray-200"
               }`}
             >
-              <span>{task.action_item.deadline}</span>
+              <span>📅 {task.action_item.deadline}</span>
             </div>
           )}
+        </div>
+
+        <p className="text-sm font-semibold text-[#111111] leading-snug">
+          {task.action_item?.task_description || "Untitled task"}
+        </p>
+
+        {/* Owner Avatar & Name */}
+        <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-50">
+          <div className="w-6 h-6 rounded-full bg-[#111111] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+            {getInitials(ownerName)}
+          </div>
+          <span className="text-xs text-gray-600 font-medium truncate max-w-[180px]">
+            {ownerName}
+          </span>
         </div>
       </div>
 
