@@ -87,10 +87,29 @@ export default async function MeetingDetailPage({
     users: tm.users || null,
   }));
 
-  // Parse diarized conversation
+  // Parse diarized conversation, executive summary, and key decisions
   let diarizedDialogue: Array<{ speaker: string; text: string; time?: string }> = [];
-  if (transcript?.diarized_json && Array.isArray(transcript.diarized_json)) {
-    diarizedDialogue = transcript.diarized_json;
+  let executiveSummary = meeting.summary || "";
+  let keyDecisions: string[] = [];
+
+  if (transcript?.diarized_json) {
+    if (Array.isArray(transcript.diarized_json)) {
+      diarizedDialogue = transcript.diarized_json;
+    } else if (typeof transcript.diarized_json === "object") {
+      if (Array.isArray(transcript.diarized_json.dialogue)) {
+        diarizedDialogue = transcript.diarized_json.dialogue;
+      }
+      if (!executiveSummary && transcript.diarized_json.summary) {
+        executiveSummary = transcript.diarized_json.summary;
+      }
+      if (Array.isArray(transcript.diarized_json.key_decisions)) {
+        keyDecisions = transcript.diarized_json.key_decisions;
+      }
+    }
+  }
+
+  if (!executiveSummary && transcript?.raw_text) {
+    executiveSummary = transcript.raw_text;
   }
 
   const totalTasks = fullTasks.length;
@@ -168,9 +187,11 @@ export default async function MeetingDetailPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {(meeting.status === "uploaded" || meeting.processing_status === "uploaded" || Boolean(meeting.transcript_url && meeting.status !== "processed")) && (
+            {(meeting.status === "uploaded" || meeting.processing_status === "uploaded" || Boolean(meeting.transcript_url && meeting.status !== "processed")) ? (
               <ProcessNowButton meetingId={meetingId} />
-            )}
+            ) : meeting.status === "processed" ? (
+              <ProcessNowButton meetingId={meetingId} isReprocess={true} />
+            ) : null}
             <AddMeetingActionItemModal
               meetingId={meetingId}
               teamMembers={formattedTeamMembers}
@@ -249,16 +270,29 @@ export default async function MeetingDetailPage({
           </span>
         </div>
 
-        {transcript?.raw_text ? (
+        {executiveSummary ? (
           <div className="space-y-4">
             <div className="bg-[#F8F9FA] p-5 rounded-xl border border-[#E5E5E5] text-sm text-gray-800 leading-relaxed font-normal">
               <p className="font-semibold text-[#111111] mb-2 text-xs uppercase tracking-wider text-gray-500">
                 Key Discussion Summary
               </p>
               <p className="whitespace-pre-line leading-relaxed">
-                {transcript.raw_text}
+                {executiveSummary}
               </p>
             </div>
+
+            {keyDecisions.length > 0 && (
+              <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-100">
+                <p className="font-semibold text-emerald-900 mb-2 text-xs uppercase tracking-wider">
+                  Key Operational Decisions
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-xs text-emerald-800">
+                  {keyDecisions.map((dec, i) => (
+                    <li key={i}>{dec}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-[#F8F9FA] border border-dashed border-gray-200 rounded-xl p-8 text-center space-y-2">

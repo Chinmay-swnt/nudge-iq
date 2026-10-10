@@ -34,8 +34,38 @@ const STATUS_OPTIONS = [
 export default function TaskCard({ task }: TaskCardProps) {
   const [status, setStatus] = useState(task.status);
   const [updating, setUpdating] = useState(false);
+  const [nudging, setNudging] = useState(false);
+  const [nudged, setNudged] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  const handleManualNudge = async () => {
+    if (nudging || nudged) return;
+    setNudging(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || "";
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+
+      const res = await fetch(`${backendUrl}/api/reminders/nudge/${task.id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        setNudged(true);
+        setTimeout(() => setNudged(false), 5000);
+      }
+    } catch (err) {
+      console.warn("Manual nudge error:", err);
+    } finally {
+      setNudging(false);
+    }
+  };
 
   const handleStatusChange = async (newStatus: string) => {
     if (newStatus === status || updating) return;
@@ -99,20 +129,39 @@ export default function TaskCard({ task }: TaskCardProps) {
         </div>
       </div>
 
-      <div className="pt-2 border-t border-[#F0F0F0] flex items-center justify-between">
-        <label className="text-xs text-gray-400">Move to:</label>
-        <select
-          value={status}
-          onChange={(e) => handleStatusChange(e.target.value)}
-          disabled={updating}
-          className="text-xs bg-[#F8F9FA] border border-[#E5E5E5] rounded-md px-2 py-1 text-gray-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#3B82F6]"
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+      <div className="pt-2 border-t border-[#F0F0F0] flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-gray-400">Status:</label>
+          <select
+            value={status}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            disabled={updating}
+            className="text-xs bg-[#F8F9FA] border border-[#E5E5E5] rounded-md px-2 py-1 text-gray-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#3B82F6]"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {status !== "done" && (
+          <button
+            type="button"
+            onClick={handleManualNudge}
+            disabled={nudging || nudged}
+            className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors flex items-center gap-1 cursor-pointer ${
+              nudged
+                ? "bg-amber-100 text-amber-800 border border-amber-200"
+                : "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+            }`}
+            title="Send task reminder to assignee"
+          >
+            <span>⚡</span>
+            <span>{nudging ? "Nudging…" : nudged ? "Nudged!" : "Nudge"}</span>
+          </button>
+        )}
       </div>
     </div>
   );

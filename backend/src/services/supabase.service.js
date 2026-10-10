@@ -1,3 +1,6 @@
+if (typeof globalThis.WebSocket === "undefined") {
+  globalThis.WebSocket = class {};
+}
 const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 const { createClient } = require("@supabase/supabase-js");

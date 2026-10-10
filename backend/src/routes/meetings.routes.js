@@ -249,4 +249,80 @@ router.post("/:meetingId/process", async (req, res) => {
   }
 });
 
+/**
+ * 4. Reprocess meeting transcript through LLM
+ * POST /api/meetings/:meetingId/reprocess
+ */
+router.post("/:meetingId/reprocess", async (req, res) => {
+  try {
+    const { meetingId } = req.params;
+
+    const { data: meeting, error: mErr } = await supabaseAdmin
+      .from("meetings")
+      .select("*")
+      .eq("id", meetingId)
+      .single();
+
+    if (mErr || !meeting) {
+      return res.status(404).json({ error: "Meeting not found" });
+    }
+
+    const authResult = await authenticateAndAuthorize(req, meeting.team_id);
+    if (!authResult.authorized) {
+      return res.status(authResult.status).json({ error: authResult.error });
+    }
+
+    // Check for existing transcript
+    const { data: transcripts } = await supabaseAdmin
+      .from("transcripts")
+      .select("*")
+      .eq("meeting_id", meetingId)
+      .limit(1);
+
+    const existingTranscript = transcripts?.[0];
+
+    let pipelineResult;
+    if (existingTranscript && existingTranscript.raw_text) {
+      console.log(`[meetings.routes] Reprocessing existing transcript for meeting: ${meetingId}`);
+      pipelineResult = await processMeetingAudio({
+        meetingId,
+        teamId: meeting.team_id,
+        preloadedTranscript: {
+          raw_text: existingTranscript.raw_text,
+          diarized_json: existingTranscript.diarized_json || [],
+        },
+      });
+    } else {
+      console.log(`[meetings.routes] No existing transcript found, running full processing for: ${meetingId}`);
+      const audioPath = meeting.audio_path || meeting.transcript_url;
+      let audioBuffer = null;
+
+      if (audioPath && !audioPath.startsWith("http")) {
+        const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+          .from("recordings")
+          .download(audioPath);
+
+        if (!downloadError && fileData) {
+          audioBuffer = Buffer.from(await fileData.arrayBuffer());
+        }
+      }
+
+      pipelineResult = await processMeetingAudio({
+        meetingId,
+        teamId: meeting.team_id,
+        audioData: audioBuffer,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      meeting_id: meetingId,
+      ...pipelineResult,
+    });
+  } catch (err) {
+    console.error("[meetings.routes] POST /:meetingId/reprocess error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -1,3 +1,6 @@
+if (typeof globalThis.WebSocket === "undefined") {
+  globalThis.WebSocket = class {};
+}
 const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "../../../backend/.env") });
 require("dotenv").config();
