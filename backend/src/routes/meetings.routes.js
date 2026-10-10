@@ -332,11 +332,21 @@ router.post("/:meetingId/reprocess", async (req, res) => {
 router.get("/:meetingId/status", async (req, res) => {
   try {
     const { meetingId } = req.params;
-    const { data: meeting, error } = await supabaseAdmin
+    let { data: meeting, error } = await supabaseAdmin
       .from("meetings")
       .select("id, status, processing_status, error_message, summary")
       .eq("id", meetingId)
       .single();
+
+    if (error && (error.code === "42703" || String(error.message).includes("column"))) {
+      const fb = await supabaseAdmin
+        .from("meetings")
+        .select("id, status")
+        .eq("id", meetingId)
+        .single();
+      meeting = fb.data;
+      error = fb.error;
+    }
 
     if (error || !meeting) {
       return res.status(404).json({ error: "Meeting not found" });
