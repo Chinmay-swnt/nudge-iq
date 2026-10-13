@@ -36,8 +36,18 @@ router.post("/bot/join", async (req, res) => {
 router.post("/bot/stop/:meetingId", async (req, res) => {
   try {
     const { meetingId } = req.params;
-    const result = await stopMeetingBot(meetingId);
-    return res.status(200).json(result);
+
+    // Run stop and pipeline in background
+    stopMeetingBot(meetingId).catch((err) => {
+      console.error(`[meetingPipeline.routes] Error processing stopped bot ${meetingId}:`, err);
+    });
+
+    return res.status(200).json({
+      success: true,
+      meetingId,
+      status: "processing",
+      message: "Bot stopped. Recording is being processed in the background.",
+    });
   } catch (err) {
     console.error("[meetingPipeline.routes] /bot/stop error:", err);
     return res.status(500).json({ error: err.message });
@@ -49,7 +59,7 @@ router.get("/bot/active", (req, res) => {
   res.json({ bots: getActiveBots() });
 });
 
-// 4. Upload Audio file & Process through AI Pipeline
+// 4. Upload Audio file & kick off background AI pipeline
 router.post("/process-audio", upload.single("audio_file"), async (req, res) => {
   try {
     const { team_id, title, meeting_id } = req.body;
@@ -62,33 +72,19 @@ router.post("/process-audio", upload.single("audio_file"), async (req, res) => {
     const client = supabaseAdmin || supabase;
     let activeMeetingId = meeting_id;
 
-    // Create meeting record if not supplied
+    // Create meeting record immediately (so we can return its ID right away)
     if (!activeMeetingId && client) {
       const meetingTitle = title || file?.originalname?.replace(/\.[^/.]+$/, "") || "Uploaded Audio Discussion";
-      let createRes = await client
+      const createRes = await client
         .from("meetings")
         .insert({
           team_id,
           title: meetingTitle,
           meeting_date: new Date().toISOString(),
           status: "pending",
-          processing_status: "created",
         })
         .select()
         .single();
-
-      if (createRes.error && (createRes.error.code === "42703" || String(createRes.error.message).includes("column"))) {
-        createRes = await client
-          .from("meetings")
-          .insert({
-            team_id,
-            title: meetingTitle,
-            meeting_date: new Date().toISOString(),
-            status: "pending",
-          })
-          .select()
-          .single();
-      }
 
       if (createRes.error) {
         return res.status(500).json({ error: createRes.error.message });
@@ -97,13 +93,16 @@ router.post("/process-audio", upload.single("audio_file"), async (req, res) => {
     }
 
     if (!activeMeetingId) {
-      activeMeetingId = `meeting-${Date.now()}`;
+      const crypto = require("crypto");
+      activeMeetingId = crypto.randomUUID();
     }
 
-    // Save audio file to Supabase Storage if provided
+    // Save audio to Supabase Storage (sync, fast — just an upload)
     if (file && client) {
       try {
-        const sanitizedName = file.originalname ? file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_") : "recording.webm";
+        const sanitizedName = file.originalname
+          ? file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")
+          : "recording.webm";
         const storagePath = `${team_id}/${activeMeetingId}/${sanitizedName}`;
         await client.storage.createBucket("recordings", { public: false }).catch(() => {});
         await client.storage.from("recordings").upload(storagePath, file.buffer, {
@@ -114,10 +113,8 @@ router.post("/process-audio", upload.single("audio_file"), async (req, res) => {
         await client
           .from("meetings")
           .update({
-            audio_path: storagePath,
             transcript_url: storagePath,
             status: "uploaded",
-            processing_status: "uploaded",
           })
           .eq("id", activeMeetingId)
           .catch(() => {});
@@ -126,22 +123,32 @@ router.post("/process-audio", upload.single("audio_file"), async (req, res) => {
       }
     }
 
-    // Run end-to-end processing pipeline
-    const pipelineResult = await processMeetingAudio({
-      meetingId: activeMeetingId,
-      teamId: team_id,
-      audioData: file ? file.buffer : null,
-    });
-
-    return res.status(200).json({
+    // ── RESPOND IMMEDIATELY — client should poll /status ──
+    res.status(202).json({
       success: true,
       meeting_id: activeMeetingId,
-      ...pipelineResult,
+      processing_status: "processing",
+      message: "Meeting created. Processing audio in background — poll GET /api/meetings/:id/status for updates.",
+    });
+
+    // ── Run pipeline in background (after response is sent) ──
+    setImmediate(async () => {
+      try {
+        await processMeetingAudio({
+          meetingId: activeMeetingId,
+          teamId: team_id,
+          audioData: file ? file.buffer : null,
+        });
+        console.log(`[meetingPipeline.routes] Background pipeline complete for ${activeMeetingId}`);
+      } catch (err) {
+        console.error(`[meetingPipeline.routes] Background pipeline error for ${activeMeetingId}:`, err.message);
+      }
     });
   } catch (err) {
     console.error("[meetingPipeline.routes] /process-audio error:", err);
     return res.status(500).json({ error: err.message || "Audio processing failed" });
   }
 });
+
 
 module.exports = router;

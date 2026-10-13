@@ -7,7 +7,13 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
  * @returns {Promise<{ summary: string, key_decisions: Array, action_items: Array }>}
  */
 async function extractActionItems(transcriptText, teamMembers = []) {
+  console.log(`[llmExtraction] Starting LLM action item extraction (${transcriptText.length} chars of transcript)...`);
+  const startTime = Date.now();
+
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s safety timeout
+
     const response = await fetch(`${ML_SERVICE_URL}/extract`, {
       method: "POST",
       headers: {
@@ -17,18 +23,25 @@ async function extractActionItems(transcriptText, teamMembers = []) {
         transcript_text: transcriptText,
         team_members: teamMembers,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (response.ok) {
       const data = await response.json();
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      console.log(`[llmExtraction] LLM extraction completed in ${elapsed}s! Extracted ${(data.action_items || []).length} action items.`);
       return {
         summary: data.summary || "",
         key_decisions: data.key_decisions || [],
         action_items: data.action_items || [],
       };
+    } else {
+      console.warn(`[llmExtraction] ML service returned HTTP ${response.status}`);
     }
   } catch (err) {
-    console.warn("[llmExtraction.service] ML service offline, using Node.js local extractor:", err.message);
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    console.warn(`[llmExtraction] ML service note (${elapsed}s elapsed): ${err.message}. Using rule-based fallback.`);
   }
 
   // Node.js Local Fallback Extractor (100% Offline / Free)

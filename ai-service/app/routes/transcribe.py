@@ -42,13 +42,18 @@ def format_timestamp(seconds: float) -> str:
 @router.post("/transcribe")
 async def transcribe_audio(
     audio_file: Optional[UploadFile] = File(None),
-    audio_url: Optional[str] = Form(None)
+    audio_url: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),   # caller hint: "auto", "hi", "ar", etc. None = auto-detect
 ):
     """
     100% Free offline speech-to-text using local faster-whisper.
+    Supports multilingual auto-detection — no language config needed.
     """
     if not audio_file and not audio_url:
         raise HTTPException(status_code=400, detail="Must provide audio_file or audio_url")
+
+    # Normalize language: None / "auto" / "" all mean auto-detect
+    lang_hint = None if (not language or language.lower() == "auto") else language.lower()
 
     # Handle file save to temp
     temp_path = None
@@ -68,14 +73,20 @@ async def transcribe_audio(
                 print(f"[ml-service] Audio file is too small ({file_size} bytes), treating as silent.")
                 return {
                     "status": "success",
-                    "language": "en",
+                    "language": "unknown",
                     "duration": 0,
                     "raw_text": "No audible speech detected during this recording.",
                     "diarized_json": []
                 }
 
             try:
-                segments, info = model.transcribe(temp_path, beam_size=5, vad_filter=True)
+                # language=None → Whisper auto-detects; lang_hint overrides
+                segments, info = model.transcribe(
+                    temp_path,
+                    beam_size=5,
+                    vad_filter=True,
+                    language=lang_hint,          # None = auto-detect
+                )
                 
                 raw_text_parts = []
                 diarized_json = []

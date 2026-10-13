@@ -188,9 +188,11 @@ YOU MUST RESPOND WITH STRICT, VALID JSON ONLY conforming to this schema:
             format="json",
             options={
                 "temperature": 0.1,  # Low temperature for deterministic, factual JSON
-                "num_ctx": 4096,
+                "num_ctx": 2048,     # 2048 context is optimal for CPU inference (2x faster than 4096)
+                "num_predict": 512,  # Cap generation tokens to prevent runaways
             }
         )
+        print(f"[extract] LLM generation finished successfully!")
 
         content = response["message"]["content"]
         if not content:

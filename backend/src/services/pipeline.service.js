@@ -18,12 +18,12 @@ async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl
   const client = supabaseAdmin || supabase;
 
   try {
-    // 0. Update meeting processing status to 'transcribing'
+    // 0. Update meeting status to 'processing'
     if (client) {
       try {
         await client
           .from("meetings")
-          .update({ processing_status: "transcribing" })
+          .update({ status: "processing" })
           .eq("id", meetingId);
       } catch (_) {}
     }
@@ -68,15 +68,7 @@ async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl
 
     console.log(`[pipeline.service] Transcription ready (${raw_text.length} chars)`);
 
-    // 3. Update status to 'extracting'
-    if (client) {
-      try {
-        await client
-          .from("meetings")
-          .update({ processing_status: "extracting" })
-          .eq("id", meetingId);
-      } catch (_) {}
-    }
+    // 3. Status remains 'processing' while LLM runs
 
     // 4. Run LLM / NLP Action Item and Summary Extraction
     const extractionResult = await extractActionItems(raw_text, teamMembers);
@@ -162,24 +154,12 @@ async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl
       }
 
       // 5d. Update Meeting status to 'processed'
-      let updateRes = await client
+      await client
         .from("meetings")
         .update({
           status: "processed",
-          processing_status: "processed",
-          summary: extractionResult.summary || null,
         })
         .eq("id", meetingId);
-
-      if (updateRes.error) {
-        // Fallback if processing_status or summary columns are not present
-        await client
-          .from("meetings")
-          .update({
-            status: "processed",
-          })
-          .eq("id", meetingId);
-      }
     }
 
     return {
@@ -198,8 +178,7 @@ async function processMeetingAudio({ meetingId, teamId, audioData, transcriptUrl
         await client
           .from("meetings")
           .update({
-            processing_status: "failed",
-            error_message: err.message,
+            status: "failed",
           })
           .eq("id", meetingId);
       } catch (_) {}
